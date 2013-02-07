@@ -1,0 +1,124 @@
+<?php
+
+/**
+ * @file
+ * Provides a caption textarea (similar to alt/title) for image fields.
+ */
+
+/**
+ * Implements hook_form_alter().
+ */
+function image_field_caption_form_alter(&$form, &$form_state, $form_id) {
+  // Only make modifications to node edit forms.
+  if (!isset($form['#node_edit_form']) || !$form['#node_edit_form']) { return; }
+  $any_image_fields = false;
+  // Grab the fields for this content type.
+  $fields = field_info_instances('node', $form['type']['#value']);
+  // Iterate over each field.
+  foreach($fields as $field_name => $field) {
+    // Skip any deleted and non image widget fields.
+    if ($field['deleted'] == 1) { continue; }
+    if ($field['widget']['type'] != 'image_image') { continue; }
+    $any_image_fields = true;
+    // Attach an after build handler for this image field element.
+    $form[$field_name]['#after_build'][] =
+      'image_field_caption_form_element_after_build';
+  }
+  // If we had any image fields on this form, attach a custom submit handler.
+  if ($any_image_fields) {
+    $form['#submit'][] = 'image_field_caption_form_submit_handler';
+  }
+}
+
+/**
+ * An #after_build callback for image fields. Attaches the caption textarea to
+ * the image field form element.
+ */
+function image_field_caption_form_element_after_build($element, &$form_state) {
+  // Add the caption textarea to the image field element delta.
+  $delta = 0;
+  while (isset($element['und'][$delta])) {
+    // Grab the field name and field.
+    $field_name = $element['und']['#field_name'];
+    $field = $element['und'][$delta]['#entity']->$field_name;
+    // Prepare the default value.
+    $default_value = '';
+    if (isset($field['und'][$delta]['caption'])) {
+      $default_value = $field['und'][$delta]['caption'];
+    }
+    $element['und'][$delta]['caption'] = array(
+      '#type' => 'textarea',
+      '#title' => t('Caption'),
+      '#description' => t('Enter any caption text for this image.'),
+      '#value' => $default_value, /* http://drupal.org/node/1189584 */
+      '#attributes' => array(
+        'id' => "{$element['#id']}-und-$delta-caption",
+        'name' => "{$element['#array_parents'][0]}[und][$delta][caption]",
+      ),
+    );
+    $delta++;
+  }
+  return $element;
+}
+
+/**
+ * A #submit callback for node forms with image fields.
+ */
+function image_field_caption_form_submit_handler($form, &$form_state) {
+  // Grab the fields for this content type.
+  $fields = field_info_instances('node', $form['type']['#value']);
+  // Iterate over each field.
+  foreach($fields as $field_name => $field) {
+    // Skip any deleted and non image widget fields.
+    if ($field['deleted'] == 1) { continue; }
+    if ($field['widget']['type'] != 'image_image') { continue; }
+    // Iterate over each delta in the form state values for this image field.
+    // We only care about deltas that actually have a file id.
+    $delta = 0;
+    while (isset($form_state['values'][$field_name]['und'][$delta]['fid'])) {
+      // Grab the file id and the caption.
+      $fid = $form_state['values'][$field_name]['und'][$delta]['fid'];
+      $caption = $form_state['values'][$field_name]['und'][$delta]['caption'];
+      // If we have a valid file id and caption, save the results in the db.
+      if ($fid != 0 && $caption != '') {
+        db_merge('image_field_caption')
+          ->key(array('fid' => $fid, 'caption' => $caption))
+          ->fields(array('fid' => $fid, 'caption' => $caption))
+          ->execute();
+      }
+      else {
+        // We did not have a caption, try to delete the old record.
+        db_delete('image_field_caption')
+          ->condition('fid', $fid)
+          ->execute();
+      }
+      $delta++;
+    }
+  }
+}
+
+/**
+ * Implements hook_file_load().
+ */
+function image_field_caption_file_load($files) {
+  // Add caption data into the file object.
+  $result = db_query(
+    'SELECT fid, caption FROM {image_field_caption} WHERE fid IN (:fids)',
+    array(':fids' => array_keys($files))
+  )->fetchAll(PDO::FETCH_ASSOC);
+  foreach ($result as $record) {
+    foreach ($record as $key => $value) {
+      $files[$record['fid']]->$key = $value;
+    }
+  }
+}
+
+/**
+ * Implements hook_file_delete().
+ */
+function image_field_caption_file_delete($file) {
+  db_delete('image_field_caption')
+    ->condition('fid', $file->fid)
+    ->execute();
+}
+
