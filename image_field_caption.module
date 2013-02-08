@@ -9,24 +9,36 @@
  * Implements hook_form_alter().
  */
 function image_field_caption_form_alter(&$form, &$form_state, $form_id) {
+  //dpm($form_id);
   // Only make modifications to node edit forms.
-  if (!isset($form['#node_edit_form']) || !$form['#node_edit_form']) { return; }
-  $any_image_fields = false;
-  // Grab the fields for this content type.
-  $fields = field_info_instances('node', $form['type']['#value']);
-  // Iterate over each field.
-  foreach($fields as $field_name => $field) {
-    // Skip any deleted and non image widget fields.
-    if ($field['deleted'] == 1) { continue; }
-    if ($field['widget']['type'] != 'image_image') { continue; }
-    $any_image_fields = true;
-    // Attach an after build handler for this image field element.
-    $form[$field_name]['#after_build'][] =
-      'image_field_caption_form_element_after_build';
+  if (!isset($form['#node_edit_form']) || !$form['#node_edit_form']) {
+    /*if ($form_id == 'field_ui_display_overview_form') {
+      dpm($form);
+      dpm($form_state);
+      // Grab the fields for this content type.
+      $fields = field_info_instances($form['#entity_type'], $form['#bundle']);
+      dpm($fields);
+      // Iterate over each field, looking for any image fields.
+      foreach($fields as $field_name => $field) {
+        // Skip any deleted and non image widget fields.
+        if ($field['deleted'] == 1) { continue; }
+        if ($field['widget']['type'] != 'image_image') { continue; }
+        dpm($field_name);
+        dpm($field);
+      }
+    }*/
   }
-  // If we had any image fields on this form, attach a custom submit handler.
-  if ($any_image_fields) {
-    $form['#submit'][] = 'image_field_caption_form_submit_handler';
+  else {
+    // We are on a node form, grab the image fields for this content type.
+    $image_fields = image_field_caption_get_image_fields('node', $form['type']['#value']);
+    if ($image_fields) {
+      // Attach an after build handler for each image field element and then
+      // attach a custom submit handler to the form.
+      foreach($image_fields as $field_name => $field) {
+        $form[$field_name]['#after_build'][] = 'image_field_caption_form_element_after_build';
+      }
+      $form['#submit'][] = 'image_field_caption_form_submit_handler';  
+    }
   }
 }
 
@@ -65,35 +77,34 @@ function image_field_caption_form_element_after_build($element, &$form_state) {
  * A #submit callback for node forms with image fields.
  */
 function image_field_caption_form_submit_handler($form, &$form_state) {
-  // Grab the fields for this content type.
-  $fields = field_info_instances('node', $form['type']['#value']);
-  // Iterate over each field.
-  foreach($fields as $field_name => $field) {
-    // Skip any deleted and non image widget fields.
-    if ($field['deleted'] == 1) { continue; }
-    if ($field['widget']['type'] != 'image_image') { continue; }
-    // Iterate over each delta in the form state values for this image field.
-    // We only care about deltas that actually have a file id.
-    $delta = 0;
-    while (isset($form_state['values'][$field_name]['und'][$delta]['fid'])) {
-      // Grab the file id and the caption.
-      $fid = $form_state['values'][$field_name]['und'][$delta]['fid'];
-      $caption = $form_state['values'][$field_name]['und'][$delta]['caption'];
-      // If we have a valid file id and caption, save the results in the db.
-      if ($fid != 0 && $caption != '') {
-        db_merge('image_field_caption')
-          ->key(array('fid' => $fid, 'caption' => $caption))
-          ->fields(array('fid' => $fid, 'caption' => $caption))
-          ->execute();
+  // Grab the image fields for this content type.
+  $image_fields = image_field_caption_get_image_fields('node', $form['type']['#value']);
+  if ($image_fields) {
+    // For each image field, iterate over each delta in the form state values
+    // for the image field. We only care about deltas that have a file id.
+    foreach($image_fields as $field_name => $field) {
+      $delta = 0;
+      while (isset($form_state['values'][$field_name]['und'][$delta]['fid'])) {
+        // Grab the file id and the caption.
+        $fid = $form_state['values'][$field_name]['und'][$delta]['fid'];
+        $caption = $form_state['values'][$field_name]['und'][$delta]['caption'];
+        // If we have a valid file id and caption, save the results in the db.
+        if ($fid != 0 && $caption != '') {
+          db_merge('image_field_caption')
+            ->key(array('fid' => $fid, 'caption' => $caption))
+            ->fields(array('fid' => $fid, 'caption' => $caption))
+            ->execute();
+        }
+        else {
+          // We did not have a caption, try to delete the old record.
+          db_delete('image_field_caption')
+            ->condition('fid', $fid)
+            ->execute();
+        }
+        $delta++;
       }
-      else {
-        // We did not have a caption, try to delete the old record.
-        db_delete('image_field_caption')
-          ->condition('fid', $fid)
-          ->execute();
-      }
-      $delta++;
     }
+    $form['#submit'][] = 'image_field_caption_form_submit_handler';  
   }
 }
 
@@ -111,6 +122,7 @@ function image_field_caption_file_load($files) {
       $files[$record['fid']]->$key = $value;
     }
   }
+  //dpm($files);
 }
 
 /**
@@ -120,5 +132,183 @@ function image_field_caption_file_delete($file) {
   db_delete('image_field_caption')
     ->condition('fid', $file->fid)
     ->execute();
+}
+
+/**
+ * Implements hook_field_attach_preprocess_alter().
+ */
+function image_field_caption_field_attach_preprocess_alter(&$variables, $context) {
+  //dpm('image_field_caption_field_attach_preprocess_alter');
+  //dpm($context);
+  //dpm($variables);
+  //dpm($context);
+  // For each image field, pull out any caption and place it in the
+  // corresponding content variable so it will be available to the theme layer.
+  $image_fields = image_field_caption_get_image_fields('node', $variables['type']);
+  if ($image_fields) {
+    foreach($image_fields as $field_name => $field) {
+      $delta = 0;
+      while (isset($variables[$field_name][$delta]['fid'])) {
+        if (isset($variables[$field_name][$delta]['caption'])) {
+          //$variables[$field_name][$delta]['attributes'][] = 'fuck';
+          //$variables['content'][$field_name]
+        }
+        $delta++;
+      }
+    }  
+  }
+}
+
+/**
+ * Implements hook_theme_registry_alter().
+ */
+function image_field_caption_theme_registry_alter(&$theme_registry) {
+  dpm($theme_registry);
+  /*$theme_registry['image']['theme path'] = drupal_get_path('module', 'image_field_caption');
+  $theme_registry['image']['function'] = 'image_field_caption_image';
+  $theme_registry['image']['variables']['caption'] = null;*/
+  $theme_registry['image_style']['theme path'] = drupal_get_path('module', 'image_field_caption');
+  $theme_registry['image_style']['function'] = 'image_field_caption_image';
+  $theme_registry['image_style']['variables']['caption'] = null;
+  //dpm($theme_registry);
+}
+
+/**
+ * Implements hook_preprocess().
+ */
+/*function image_field_caption_preprocess(&$variables, $hook) {
+  if ($hook == 'page') {
+    dpm($hook);
+    dpm($variables);
+  }
+}*/
+
+/**
+ * Implements hook_preprocess_HOOK().
+ */
+function image_field_caption_preprocess_image(&$variables) {
+  dpm($variables);
+  //$variables['theme_hook_suggestions'][] = 'image_field_caption_theme_image';
+  //$variables['attributes']['caption'] = array('chunky monkey');
+}
+
+/**
+ * Implements hook_process_HOOK().
+ */
+function image_field_caption_process_image(&$variables) {
+  dpm($variables);
+  //$variables['theme_hook_suggestions'][] = 'image_field_caption_theme_image';
+  //$variables['attributes']['caption'] = array('chunky monkey');
+}
+
+/**
+ * Theme registry override for theme_image().
+ */
+function image_field_caption_image($variables) {
+  dpm($variables);
+  return theme_image($variables);
+  /*$attributes = $variables['attributes'];
+  $attributes['src'] = file_create_url($variables['path']);
+
+  foreach (array('width', 'height', 'alt', 'title', 'caption') as $key) {
+
+    if (isset($variables[$key])) {
+      $attributes[$key] = $variables[$key];
+    }
+  }
+
+  return '<img' . drupal_attributes($attributes) . ' />';*/
+}
+
+/**
+ * Implements hook_node_view().
+ */
+/*function image_field_caption_node_view($node, $view_mode, $langcode) {
+  //dpm($node);
+  $image_fields = image_field_caption_get_image_fields('node', $node->type);
+  if ($image_fields) {
+    foreach($image_fields as $field_name => $field) {
+      $delta = 0;
+      while (isset($node->content[$field_name][$delta]['#item']['fid'])) {
+        if (isset($node->content[$field_name]['#items'][$delta]['caption'])) {
+          //dpm($node->content[$field_name]);
+          //$node->content[$field_name]['#formatter'] = 'image_field_caption';
+          //$node->content[$field_name][$delta]['#theme'] = 'image_field_caption';
+          //$node->content['blah'] = theme('image_field_caption');
+          //$node->content[$field_name][$delta]['#markup'] = 'CAPTHIS';
+        }
+        //dpm($node->content[$field_name]['#items'][$delta]);
+        $delta++;
+      }
+    }  
+  }
+  //dpm($node);
+  return $node;
+}*/
+
+/*function image_field_caption_theme_image($variables) {
+  drupal_set_message('image_field_caption_theme_image');
+  return theme('image', $variables);
+}*/
+
+/**
+ * 
+ */
+/*function image_field_caption_image_style($variables) {
+  dpm($variables);
+  return theme_image_style($variables);
+}*/
+
+/**
+ * 
+ */
+/*function image_field_caption_image_formatter($variables) {
+  dpm($variables);
+  return theme_image_formatter($variables);
+}*/
+
+
+
+/**
+ * Implements hook_theme().
+ */
+function image_field_caption_theme($existing, $type, $theme, $path) {
+  dpm($existing);
+  /*$existing['image_style']['theme path'] = 'sites/all/modules/image_field_caption';
+  $existing['image_style']['function'] = 'image_field_caption_image_style';
+  $existing['image_formatter']['theme path'] = 'sites/all/modules/image_field_caption';
+  $existing['image_formatter']['function'] = 'image_field_caption_image_formatter';
+  dpm($existing);*/
+  return array(
+    'image_field_caption' => array(
+      'template' => 'image_field_caption',
+    ),
+  );
+  
+}
+
+/**
+ *
+ */
+/*function theme_image_field_caption_image($variables) {
+  dpm($variables);
+}*/
+
+/**
+ * Given an entity type and bundle name, this will return an associative array
+ * of image field info instances, keyed by image field machine names. Returns
+ * null if no image fields are found.
+ */
+function image_field_caption_get_image_fields($entity_type, $bundle) {
+  $image_fields = array();
+  $fields = field_info_instances($entity_type, $bundle);
+  foreach($fields as $field_name => $field) {
+    // Skip any deleted and non image widget fields.
+    if ($field['deleted'] == 1) { continue; }
+    if ($field['widget']['type'] != 'image_image') { continue; }
+    $image_fields[$field_name] = $field;
+  }
+  if (empty($image_fields)) { return null; }
+  return $image_fields;
 }
 
