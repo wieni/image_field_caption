@@ -30,11 +30,14 @@ function image_field_caption_form_element_after_build($element, &$form_state) {
   $delta = 0;
   while (isset($element['und'][$delta])) {
     $field_name = $element['und']['#field_name'];
-    if (isset($element['und'][$delta]['#entity']->$field_name)) {
-      $field = $element['und'][$delta]['#entity']->$field_name;
+    if ($form_state['values'][$field_name]['und'][$delta]['fid'] != 0) {
+      // Determine the default value.
       $default_value = '';
-      if (isset($field['und'][$delta]['caption'])) {
-        $default_value = $field['und'][$delta]['caption'];
+      if (isset($element['und'][$delta]['#entity']->$field_name)) {
+        $field = $element['und'][$delta]['#entity']->$field_name;
+        if (isset($field['und'][$delta]['caption'])) {
+          $default_value = $field['und'][$delta]['caption'];
+        }
       }
       $element['und'][$delta]['caption'] = array(
         '#type' => 'textarea',
@@ -56,6 +59,8 @@ function image_field_caption_form_element_after_build($element, &$form_state) {
  * A #submit callback for node forms with image fields.
  */
 function image_field_caption_form_submit_handler($form, &$form_state) {
+  //dpm($form);
+  //dpm($form_state);
   $image_fields = image_field_caption_get_image_fields('node', $form['type']['#value']);
   if ($image_fields) {
     // For each image field, iterate over each delta in the form state values
@@ -63,21 +68,39 @@ function image_field_caption_form_submit_handler($form, &$form_state) {
     foreach($image_fields as $field_name => $field) {
       $delta = 0;
       while (isset($form_state['values'][$field_name]['und'][$delta]['fid'])) {
-        // Grab the file id and the caption.
         $fid = $form_state['values'][$field_name]['und'][$delta]['fid'];
-        $caption = $form_state['values'][$field_name]['und'][$delta]['caption'];
-        // If we have a valid file id and caption, save the results in the db.
-        if ($fid != 0 && $caption != '') {
-          db_merge('image_field_caption')
-            ->key(array('fid' => $fid, 'caption' => $caption))
-            ->fields(array('fid' => $fid, 'caption' => $caption))
-            ->execute();
-        }
-        else {
-          // We did not have a caption, try to delete the old record.
-          db_delete('image_field_caption')
-            ->condition('fid', $fid)
-            ->execute();
+        if ($fid != 0 && isset($form_state['values'][$field_name]['und'][$delta]['caption'])) {
+          $caption = $form_state['values'][$field_name]['und'][$delta]['caption'];
+          // If we have a caption, save the results in the db.
+          if ($caption != '') {
+            // If we have a caption for this file saved, update it,
+            // otherwise insert a new caption for the file.
+            $result = db_select('image_field_caption', 'ifc')
+              ->fields('ifc', array('fid'))
+              ->condition('fid', $fid)
+              ->execute()
+              ->fetch();
+            if (isset($result->fid)) {
+              $result = db_update('image_field_caption')
+                ->fields(array('caption' => $caption))
+                ->condition('fid', $fid)
+                ->execute();
+            }
+            else {
+              $result = db_insert('image_field_caption')
+                ->fields(array('fid' => $fid, 'caption' => $caption))
+                ->execute();
+            }
+          }
+          else {
+            // We did not have a caption, try to delete the old record if we
+            // are editing a node.
+            if ($form_state['values']['nid']) {
+              db_delete('image_field_caption')
+                ->condition('fid', $fid)
+                ->execute();
+            }
+          }
         }
         $delta++;
       }
