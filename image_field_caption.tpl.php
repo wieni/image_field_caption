@@ -1,4 +1,8 @@
 <?php
-  dpm('hey hey');
+/**
+ * $image - contains the image html rendered by Drupal
+ * $caption - contains the image field caption string
+ */
 ?>
-<div>Sally Sas a Lot</div>
+<?php print $image; ?>
+<div class"image_field_caption"><?php print $caption; ?></div>

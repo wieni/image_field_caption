@@ -52,22 +52,24 @@ function image_field_caption_form_element_after_build($element, &$form_state) {
   while (isset($element['und'][$delta])) {
     // Grab the field name and field.
     $field_name = $element['und']['#field_name'];
-    $field = $element['und'][$delta]['#entity']->$field_name;
-    // Prepare the default value.
-    $default_value = '';
-    if (isset($field['und'][$delta]['caption'])) {
-      $default_value = $field['und'][$delta]['caption'];
+    if (isset($element['und'][$delta]['#entity']->$field_name)) {
+      $field = $element['und'][$delta]['#entity']->$field_name;
+      // Prepare the default value.
+      $default_value = '';
+      if (isset($field['und'][$delta]['caption'])) {
+        $default_value = $field['und'][$delta]['caption'];
+      }
+      $element['und'][$delta]['caption'] = array(
+        '#type' => 'textarea',
+        '#title' => t('Caption'),
+       '#description' => t('Enter any caption text for this image.'),
+        '#value' => $default_value, /* http://drupal.org/node/1189584 */
+        '#attributes' => array(
+          'id' => "{$element['#id']}-und-$delta-caption",
+          'name' => "{$element['#array_parents'][0]}[und][$delta][caption]",
+        ),
+      );
     }
-    $element['und'][$delta]['caption'] = array(
-      '#type' => 'textarea',
-      '#title' => t('Caption'),
-      '#description' => t('Enter any caption text for this image.'),
-      '#value' => $default_value, /* http://drupal.org/node/1189584 */
-      '#attributes' => array(
-        'id' => "{$element['#id']}-und-$delta-caption",
-        'name' => "{$element['#array_parents'][0]}[und][$delta][caption]",
-      ),
-    );
     $delta++;
   }
   return $element;
@@ -163,13 +165,16 @@ function image_field_caption_field_attach_preprocess_alter(&$variables, $context
  * Implements hook_theme_registry_alter().
  */
 function image_field_caption_theme_registry_alter(&$theme_registry) {
-  dpm($theme_registry);
+  //dpm($theme_registry);
   /*$theme_registry['image']['theme path'] = drupal_get_path('module', 'image_field_caption');
   $theme_registry['image']['function'] = 'image_field_caption_image';
   $theme_registry['image']['variables']['caption'] = null;*/
-  $theme_registry['image_style']['theme path'] = drupal_get_path('module', 'image_field_caption');
+  /*$theme_registry['image_style']['theme path'] = drupal_get_path('module', 'image_field_caption');
   $theme_registry['image_style']['function'] = 'image_field_caption_image';
-  $theme_registry['image_style']['variables']['caption'] = null;
+  $theme_registry['image_style']['variables']['caption'] = null;*/
+  $theme_registry['image_formatter']['theme path'] = drupal_get_path('module', 'image_field_caption');
+  $theme_registry['image_formatter']['function'] = 'image_field_caption_image_formatter';
+  $theme_registry['image_formatter']['variables']['caption'] = null;
   //dpm($theme_registry);
 }
 
@@ -187,7 +192,7 @@ function image_field_caption_theme_registry_alter(&$theme_registry) {
  * Implements hook_preprocess_HOOK().
  */
 function image_field_caption_preprocess_image(&$variables) {
-  dpm($variables);
+  //dpm($variables);
   //$variables['theme_hook_suggestions'][] = 'image_field_caption_theme_image';
   //$variables['attributes']['caption'] = array('chunky monkey');
 }
@@ -196,7 +201,7 @@ function image_field_caption_preprocess_image(&$variables) {
  * Implements hook_process_HOOK().
  */
 function image_field_caption_process_image(&$variables) {
-  dpm($variables);
+  //dpm($variables);
   //$variables['theme_hook_suggestions'][] = 'image_field_caption_theme_image';
   //$variables['attributes']['caption'] = array('chunky monkey');
 }
@@ -205,7 +210,7 @@ function image_field_caption_process_image(&$variables) {
  * Theme registry override for theme_image().
  */
 function image_field_caption_image($variables) {
-  dpm($variables);
+  //dpm($variables);
   return theme_image($variables);
   /*$attributes = $variables['attributes'];
   $attributes['src'] = file_create_url($variables['path']);
@@ -218,6 +223,66 @@ function image_field_caption_image($variables) {
   }
 
   return '<img' . drupal_attributes($attributes) . ' />';*/
+}
+
+/**
+ * Override of theme_image_formatter().
+ */
+function image_field_caption_image_formatter($variables) {
+  dpm($variables);
+  $item = $variables['item'];
+  $image = array(
+    'path' => $item['uri'],
+  );
+
+  if (array_key_exists('alt', $item)) {
+    $image['alt'] = $item['alt'];
+  }
+
+  if (isset($item['attributes'])) {
+    $image['attributes'] = $item['attributes'];
+  }
+
+  if (isset($item['width']) && isset($item['height'])) {
+    $image['width'] = $item['width'];
+    $image['height'] = $item['height'];
+  }
+
+  // Do not output an empty 'title' attribute.
+  if (isset($item['title']) && drupal_strlen($item['title']) > 0) {
+    $image['title'] = $item['title'];
+  }
+
+  if ($variables['image_style']) {
+    $image['style_name'] = $variables['image_style'];
+    $output = theme('image_style', $image);
+  }
+  else {
+    $output = theme('image', $image);
+  }
+
+  // The link path and link options are both optional, but for the options to be
+  // processed, the link path must at least be an empty string.
+  if (isset($variables['path']['path'])) {
+    $path = $variables['path']['path'];
+    $options = isset($variables['path']['options']) ? $variables['path']['options'] : array();
+    // When displaying an image inside a link, the html option must be TRUE.
+    $options['html'] = TRUE;
+    $output = l($output, $path, $options);
+  }
+  
+  // Now that Drupal has rendered the image, if there was a caption let's
+  // render the image and the caption, otherwise just return the already
+  // rendered image.
+  if (isset($variables['item']['caption'])) {
+    return theme('image_field_caption', array(
+      'image' => $output,
+      'caption' => $variables['item']['caption'],
+    ));
+  }
+  else {
+    return $output;
+  }
 }
 
 /**
@@ -273,7 +338,7 @@ function image_field_caption_image($variables) {
  * Implements hook_theme().
  */
 function image_field_caption_theme($existing, $type, $theme, $path) {
-  dpm($existing);
+  //dpm($existing);
   /*$existing['image_style']['theme path'] = 'sites/all/modules/image_field_caption';
   $existing['image_style']['function'] = 'image_field_caption_image_style';
   $existing['image_formatter']['theme path'] = 'sites/all/modules/image_field_caption';
@@ -282,6 +347,7 @@ function image_field_caption_theme($existing, $type, $theme, $path) {
   return array(
     'image_field_caption' => array(
       'template' => 'image_field_caption',
+      'variables' => array('image' => NULL, 'caption' => NULL),
     ),
   );
   
