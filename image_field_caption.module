@@ -14,10 +14,10 @@ function image_field_caption_form_alter(&$form, &$form_state, $form_id) {
   if (isset($form['#node_edit_form']) && $form['#node_edit_form']) {
     $image_fields = image_field_caption_get_image_fields('node', $form['type']['#value']);
     if ($image_fields) {
-      foreach($image_fields as $field_name => $field) {
+      foreach ($image_fields as $field_name => $field) {
         $form[$field_name]['#after_build'][] = 'image_field_caption_form_element_after_build';
       }
-      $form['#submit'][] = 'image_field_caption_form_submit_handler';  
+      $form['#submit'][] = 'image_field_caption_form_submit_handler';
     }
   }
 }
@@ -59,13 +59,11 @@ function image_field_caption_form_element_after_build($element, &$form_state) {
  * A #submit callback for node forms with image fields.
  */
 function image_field_caption_form_submit_handler($form, &$form_state) {
-  //dpm($form);
-  //dpm($form_state);
   $image_fields = image_field_caption_get_image_fields('node', $form['type']['#value']);
   if ($image_fields) {
     // For each image field, iterate over each delta in the form state values
     // for the image field. We only care about deltas that have a file id.
-    foreach($image_fields as $field_name => $field) {
+    foreach ($image_fields as $field_name => $field) {
       $delta = 0;
       while (isset($form_state['values'][$field_name]['und'][$delta]['fid'])) {
         $fid = $form_state['values'][$field_name]['und'][$delta]['fid'];
@@ -105,7 +103,7 @@ function image_field_caption_form_submit_handler($form, &$form_state) {
         $delta++;
       }
     }
-    $form['#submit'][] = 'image_field_caption_form_submit_handler';  
+    $form['#submit'][] = 'image_field_caption_form_submit_handler';
   }
 }
 
@@ -142,7 +140,7 @@ function image_field_caption_theme_registry_alter(&$theme_registry) {
   // assembled by theme().
   $theme_registry['image_formatter']['theme path'] = drupal_get_path('module', 'image_field_caption');
   $theme_registry['image_formatter']['function'] = 'image_field_caption_image_formatter';
-  $theme_registry['image_formatter']['variables']['caption'] = null;
+  $theme_registry['image_formatter']['variables']['caption'] = NULL;
 }
 
 /**
@@ -184,13 +182,19 @@ function image_field_caption_theme($existing, $type, $theme, $path) {
 function image_field_caption_get_image_fields($entity_type, $bundle) {
   $image_fields = array();
   $fields = field_info_instances($entity_type, $bundle);
-  foreach($fields as $field_name => $field) {
+  foreach ($fields as $field_name => $field) {
     // Skip any deleted and non image widget fields.
-    if ($field['deleted'] == 1) { continue; }
-    if ($field['widget']['type'] != 'image_image') { continue; }
+    if ($field['deleted'] == 1) {
+      continue;
+    }
+    if ($field['widget']['type'] != 'image_image') {
+      continue;
+    }
     $image_fields[$field_name] = $field;
   }
-  if (empty($image_fields)) { return null; }
+  if (empty($image_fields)) {
+    return NULL;
+  }
   return $image_fields;
 }
 
