@@ -11,6 +11,7 @@
   1. Download the module
   2. Upload module to the sites/all/modules folder
   3. Enable the module
+  4. Flush all of Drupal's caches
 
 |=======|
 | Usage |
