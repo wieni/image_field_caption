@@ -131,25 +131,50 @@ function image_field_caption_file_delete($file) {
  * Implements hook_theme_registry_alter().
  */
 function image_field_caption_theme_registry_alter(&$theme_registry) {
-  // Override the image_formatter function and add caption as a variable to be
-  // assembled by theme().
-  $theme_registry['image_formatter']['theme path'] = drupal_get_path('module', 'image_field_caption');
-  $theme_registry['image_formatter']['function'] = 'image_field_caption_image_formatter';
-  $theme_registry['image_formatter']['variables']['caption'] = NULL;
+  // Override image theme functions and add 'caption' as a variable to be
+  // assembled by theme() for each.
+  $theme_path = drupal_get_path('module', 'image_field_caption');
+  $overrides = array('image_formatter', 'image_style');
+  foreach ($overrides as $type) {
+    if (isset($theme_registry[$type])) {
+      $theme_registry[$type]['theme path'] = $theme_path;
+      $theme_registry[$type]['function'] = 'image_field_caption_theme_image';
+      $theme_registry[$type]['variables']['caption'] = NULL;
+      $theme_registry[$type]['variables']['image_field_caption_type'] = $type;    
+    }
+  }
 }
 
 /**
- * Override of theme_image_formatter().
+ * After hook_theme_registry_alter makes its alterations, this function
+ * provides the routing to properly theme the image and the caption.
  */
-function image_field_caption_image_formatter($variables) {
-  $image = theme_image_formatter($variables);
+function image_field_caption_theme_image($variables) {
+  // Depending on the image theme type, call the appropriate image theme
+  // function, then pull out any caption.
+  $image = '';
+  $caption = '';
+  switch ($variables['image_field_caption_type']) {
+    case 'image_formatter':
+      $image = theme_image_formatter($variables);
+      if (isset($variables['item']['caption'])) {
+        $caption = $variables['item']['caption'];
+      }
+      break;
+    case 'image_style':
+      $image = theme_image_style($variables);
+      if (isset($variables['caption'])) {
+        $caption = $variables['caption'];
+      }
+      break;
+  }
   // Now that Drupal has rendered the image, if there was a caption let's
   // render the image and the caption, otherwise just return the already
   // rendered image.
-  if (isset($variables['item']['caption'])) {
+  if ($caption != '') {
     return theme('image_field_caption', array(
       'image' => $image,
-      'caption' => filter_xss($variables['item']['caption']),
+      'caption' => filter_xss($caption),
     ));
   }
   else {

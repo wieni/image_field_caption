@@ -5,6 +5,6 @@
  */
 ?>
 <?php print $image; ?>
-<blockquote class"image_field_caption">
+<blockquote class="image_field_caption">
   <?php print $caption; ?>
 </blockquote>
