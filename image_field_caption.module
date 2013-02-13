@@ -6,6 +6,78 @@
  */
 
 /**
+ * Implements hook_help().
+ */
+function image_field_caption_help($path, $arg) {
+  switch ($path) {
+    case 'admin/help#image_field_caption':
+      $readme_url = drupal_get_path('module', 'image_field_caption') . '/README.txt';
+      return "<p>" . l('Click here', $readme_url) . " to view the Image Field Caption module README.</p>";
+      break;
+  }
+}
+
+/**
+ * Implements hook_permission().
+ */
+function image_field_caption_permission() {
+  return array(
+    'administer image field caption' => array(
+      'title' => t('Administer Image Field Captions'),
+      'description' => t('Adjust the caption settings for image fields.'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_menu().
+ */
+function image_field_caption_menu() {
+  $items = array();
+  
+  $items['admin/config/media/image-field-caption'] = array(
+    'title' => t('Image Field Caption'),
+    'description' => t('Configuration settings for Image Field Caption.'),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('image_field_caption_settings'),
+    'access arguments' => array('administer image field caption'),
+    'type' => MENU_NORMAL_ITEM,
+  );
+  
+  return $items;
+}
+
+/**
+ * The module's settings form.
+ */
+function image_field_caption_settings() {
+  $form = array();
+  $form['image_field_caption_allowed_tags'] = array(
+    '#title' => 'Allowed Tags',
+    '#type' => 'textfield',
+    '#description' =>
+      t('Enter the html tags allowed in image field captions, separated by comma. 
+        All caption input is ran through filter_xss() before being output.') .
+      ' ' .
+      l('More Information', 'http://api.drupal.org/api/drupal/includes%21common.inc/function/filter_xss/7'),
+    '#default_value' => image_field_captions_allowed_tags(),
+  );
+  return system_settings_form($form);
+}
+
+/**
+ * The module's settings form validation handler.
+ */
+function image_field_caption_settings_validate(&$form, &$form_state) {
+  if ($form_state['values']['image_field_caption_allowed_tags'] == '') {
+    form_set_error(
+      'image_field_caption_allowed_tags',
+      t('You must enter at least one html tag. For example: ') . image_field_captions_allowed_tags() 
+    );
+  }
+}
+
+/**
  * Implements hook_form_alter().
  */
 function image_field_caption_form_alter(&$form, &$form_state, $form_id) {
@@ -20,6 +92,15 @@ function image_field_caption_form_alter(&$form, &$form_state, $form_id) {
       $form['#submit'][] = 'image_field_caption_form_submit_handler';
     }
   }
+}
+
+/**
+ * Returns a comma separated list of default allowed html tags for captions.
+ * This matches the default allowed tags parameters for the filter_xss function. 
+ */
+function image_field_captions_allowed_tags() {
+  $default_value = 'a,em,strong,cite,blockquote,code,ul,ol,li,dl,dt,dd';
+  return variable_get('image_field_caption_allowed_tags', $default_value);
 }
 
 /**
@@ -41,7 +122,8 @@ function image_field_caption_form_element_after_build($element, &$form_state) {
       $element['und'][$delta]['caption'] = array(
         '#type' => 'textarea',
         '#title' => t('Caption'),
-        '#description' => t('Enter any caption text for this image.'),
+        '#description' => t('Enter caption text or html for this image.') .
+           '<br />' .t('Allowed html tags: ') . image_field_captions_allowed_tags(),
         '#value' => $default_value, /* http://drupal.org/node/1189584 */
         '#attributes' => array(
           'id' => "{$element['#id']}-und-$delta-caption",
@@ -174,7 +256,7 @@ function image_field_caption_theme_image($variables) {
   if ($caption != '') {
     return theme('image_field_caption', array(
       'image' => $image,
-      'caption' => filter_xss($caption),
+      'caption' => filter_xss($caption, explode(',', image_field_captions_allowed_tags())),
     ));
   }
   else {

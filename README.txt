@@ -25,6 +25,14 @@
   6. View the node to see your image field caption
 
 |===============|
+| Configuration |
+|===============|
+
+  Visit: Configuration -> Media -> Image Field Caption
+  
+  Or go to: admin/config/media/image-field-caption
+
+|===============|
 | Caption Theme |
 |===============|
 
