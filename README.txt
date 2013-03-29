@@ -72,3 +72,24 @@
     'caption' => 'My Image Caption Text',
   ));
 
+|==================|
+| Colorbox Support |
+|==================|
+
+  To enable the use of Image Field Caption with the Colorbox module:
+  
+    1. Go to the 'Manage display' page for your content type, for example:
+         Structure -> Content types -> Article -> Manage display
+    2. Change the 'Format' to 'Colorbox' for your image field
+    3. Click the gear icon to adjust the 'Format settings' for Colorbox
+    4. Under 'Caption', select 'Custom (with tokens)'
+    5. In the 'Custom caption' field, enter this token: [file:caption]
+    6. Click the 'Update' button, then the 'Save' button
+
+|==================|
+| More Information |
+|==================|
+
+  http://www.drupal.org/project/image_field_caption
+  http://www.tylerfrankenstein.com/image_field_caption
+
