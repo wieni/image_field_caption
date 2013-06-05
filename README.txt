@@ -17,20 +17,19 @@
 | Usage |
 |=======|
 
-  1. Add a new image field to a content type, or use an existing image field
-  2. Add or edit a node with an image field
-  3. Go to the image field on the node form
-  4. Enter text into the caption text area
-  5. Save the node
-  6. View the node to see your image field caption
+  1. Add a new image field to a content type, or use an existing image field and
+     configure it t o show the caption elements.
+  2. Add or edit a node or any other entity with an image field
+  3. Go to the image field on the entity form
+  4. Enter text into the caption text area and choose format
+  5. Save the entity
+  6. View the entity to see your image field caption
 
 |===============|
 | Configuration |
 |===============|
 
-  Visit: Configuration -> Media -> Image Field Caption
-  
-  Or go to: admin/config/media/image-field-caption
+  The configuration is only done on a per field basis.
 
 |===============|
 | Caption Theme |
@@ -42,49 +41,14 @@
   theme registry cache to have it recognize your theme's new file:
 
   sites/all/themes/MY_THEME/image_field_caption.tpl.php
-  
+
 |=============|
 | Caption CSS |
 |=============|
 
   To make changes to the caption css, use this CSS selector:
 
-  blockquote.image_field_caption { /* add custom css here */ }
-
-|=================================================|
-| Programmatically Rendering Images with Captions |
-|=================================================|
-
-  // Original Image.
-  $image = theme('image', array(
-    'path' => 'public://my_image.jpg',
-    'alt' => 'My Image Alt Text',
-    'title' => 'My Image Title Text',
-    'caption' => 'My Image Caption Text',
-  ));
-
-  // Thumbnail Mmage.
-  $image = theme('image_style', array(
-    'path' => 'public://my_image.jpg',
-    'style_name' => 'thumbnail',
-    'alt' => 'My Image Alt Text',
-    'title' => 'My Image Title Text',
-    'caption' => 'My Image Caption Text',
-  ));
-
-|==================|
-| Colorbox Support |
-|==================|
-
-  To enable the use of Image Field Caption with the Colorbox module:
-  
-    1. Go to the 'Manage display' page for your content type, for example:
-         Structure -> Content types -> Article -> Manage display
-    2. Change the 'Format' to 'Colorbox' for your image field
-    3. Click the gear icon to adjust the 'Format settings' for Colorbox
-    4. Under 'Caption', select 'Custom (with tokens)'
-    5. In the 'Custom caption' field, enter this token: [file:caption]
-    6. Click the 'Update' button, then the 'Save' button
+  blockquote.image-field-caption { /* add custom css here */ }
 
 |==================|
 | More Information |
