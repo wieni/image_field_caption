@@ -351,3 +351,14 @@ function image_field_caption_field_diff_view_alter(&$values, $items, $context) {
     $values[$delta][] = diff_normalise_text($item['image_field_caption']['value']);
   }
 }
+
+
+/**
+ * Implementation of hook_views_api().
+ */
+function image_field_caption_views_api() {
+  return array(
+    'api' => 3,
+    'path' => drupal_get_path('module', 'image_field_caption') .'/views',
+  );
+}
