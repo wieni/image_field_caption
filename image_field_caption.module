@@ -131,7 +131,7 @@ function image_field_caption_widget_process($element, &$form_state, $form) {
     '#type' => 'text_format',
     '#default_value' => isset($item['image_field_caption']) ? $item['image_field_caption']['value'] : '',
     '#access' => (bool) $item['fid'],
-    '#format' => isset($item['image_field_caption']) ? $item['image_field_caption']['format'] : NULL,
+    '#format' => isset($item['image_field_caption']['format']) ? $item['image_field_caption']['format'] : NULL,
   );
 
   return $element;
