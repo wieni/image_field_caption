@@ -61,7 +61,6 @@ function image_field_caption_get_image_fields($entity_type, $bundle) {
     }
 
     $field_info = field_info_field($field_name);
-
     if ($field_info['type'] != 'image') {
       continue;
     }
@@ -108,7 +107,6 @@ function image_field_caption_field_widget_form_alter(&$element, &$form_state, $c
   $instance = $context['instance'];
   $settings = $instance['settings'];
   $field = $context['field'];
-
   if (isset($settings['image_field_caption']) && $field['type'] == 'image' && $settings['image_field_caption']) {
     foreach (element_children($element) as $delta) {
       // Add all extra functionality provided by the image widget.
@@ -148,14 +146,14 @@ function image_field_caption_field_info_alter(&$info) {
 }
 
 /**
- * Implements hookd_field_attach_insert().
+ * Implements hook_field_attach_insert().
  */
 function image_field_caption_field_attach_insert($entity_type, $entity) {
   image_field_caption_field_attach_update($entity_type, $entity);
 }
 
 /**
- * Implements hookd_field_attach_update().
+ * Implements hook_field_attach_update().
  */
 function image_field_caption_field_attach_update($entity_type, $entity) {
   list($id, $vid, $bundle) = entity_extract_ids($entity_type, $entity);
