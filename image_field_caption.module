@@ -241,7 +241,7 @@ function image_field_caption_field_attach_update($entity_type, $entity) {
 }
 
 /**
- * Implements hookd_field_attach_load().
+ * Implements hook_field_attach_load().
  */
 function image_field_caption_field_attach_load($entity_type, $entities, $age, $options) {
   foreach ($entities as $entity) {
