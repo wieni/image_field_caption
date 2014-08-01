@@ -80,7 +80,7 @@ class image_field_caption_handler_join extends views_join {
             // With an array of values, we need multiple placeholders and the
             // 'IN' operator is implicit.
             foreach ($info['value'] as $value) {
-              $placeholder_i = ':views_join_condition_' . $select_query->nextPlaceholder();
+              $placeholder_i = $view_query->placeholder('views_join_condition_');
               $arguments[$placeholder_i] = $value;
             }
 
@@ -90,7 +90,7 @@ class image_field_caption_handler_join extends views_join {
           else {
             // With a single value, the '=' operator is implicit.
             $operator = !empty($info['operator']) ? $info['operator'] : '=';
-            $placeholder = ':views_join_condition_' . $select_query->nextPlaceholder();
+            $placeholder = $view_query->placeholder('views_join_condition_');
             $arguments[$placeholder] = $info['value'];
           }
 
