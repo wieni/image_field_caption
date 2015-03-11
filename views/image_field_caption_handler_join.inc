@@ -1,7 +1,12 @@
 <?php
 
+/**
+ * @file
+ * Image field caption views join handler.
+ */
+
 class image_field_caption_handler_join extends views_join {
-	/**
+  /**
    * This is basically a copy of views_join::build_join
    * excepts that it also adds delta as this module always relates
    * to a delta

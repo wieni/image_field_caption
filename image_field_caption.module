@@ -358,11 +358,11 @@ function image_field_caption_field_diff_view_alter(&$values, $items, $context) {
 
 
 /**
- * Implementation of hook_views_api().
+ * Implements of hook_views_api().
  */
 function image_field_caption_views_api() {
   return array(
     'api' => 3,
-    'path' => drupal_get_path('module', 'image_field_caption') .'/views',
+    'path' => drupal_get_path('module', 'image_field_caption') . '/views',
   );
 }

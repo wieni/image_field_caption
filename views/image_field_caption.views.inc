@@ -1,7 +1,12 @@
 <?php
 
 /**
- * Implementation of hook_views_data().
+ * @file
+ * Views hooks implementations for image field caption.
+ */
+
+/**
+ * Implements of hook_views_data().
  */
 function image_field_caption_views_data() {
   $data = array();
@@ -52,7 +57,7 @@ function image_field_caption_views_data() {
         );
 
         $data[$field_name . '_' . $current_table]['caption'] = array(
-          'title' => $label . t(' (caption)'),
+          'title' => t('@label (caption)', array('@label' => $label)),
           'help' =>  t('Appears in: @bundles.', array('@bundles' => implode(', ', $bundles_names))),
           // Information for accepting a nid as an argument
           'field' => array(
@@ -64,7 +69,7 @@ function image_field_caption_views_data() {
           foreach ($labels as $label_name => $true) {
             if ($label_name != $label) {
               $data[$field_name . '_' . $current_table]['caption']['aliases'][] = array(
-                'title' => $label_name . t(' (caption)'),
+                'title' => t('@label (caption)', array('@label' => $label)),
                 'help' => t('This is an alias of @field.', array('@field' => $label)),
                 'group' => $group,
               );
@@ -90,7 +95,7 @@ function image_field_caption_views_data() {
           );
 
           $data[$field_name . '_' . $revision_table]['caption'] = array(
-            'title' => $label . t(' (caption)'),
+            'title' => t('@label (caption)', array('@label' => $label)),
             'help' =>  t('Appears in: @bundles.', array('@bundles' => implode(', ', $bundles_names))),
             // Information for accepting a nid as an argument
             'field' => array(
@@ -105,7 +110,7 @@ function image_field_caption_views_data() {
             foreach ($labels as $label_name => $true) {
               if ($label_name != $label) {
                 $data[$field_name . '_' . $revision_table]['caption']['aliases'][] = array(
-                  'title' => $label_name . t(' (caption)'),
+                  'title' => t('@label (caption)', array('@label' => $label)),
                   'help' => t('This is an alias of @field.', array('@field' => $label)),
                   'group' => $group,
                 );

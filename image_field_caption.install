@@ -1,6 +1,12 @@
 <?php
 
 /**
+ * @file
+ * Image field caption defines a new database schema
+ * for adding a caption to images.
+ */
+
+/**
  * Implements hook_schema().
  */
 function image_field_caption_schema() {
@@ -387,7 +393,7 @@ function image_field_caption_update_7202() {
 /**
  * Make the revision caption field non mandatory
  */
-function image_field_caption_update_7203(){
+function image_field_caption_update_7203() {
   $caption_field_revision = array(
     'description' => 'The caption text.',
     'type' => 'text',
