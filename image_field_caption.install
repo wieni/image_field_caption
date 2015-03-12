@@ -402,3 +402,35 @@ function image_field_caption_update_7203() {
 
   db_change_field('field_image_field_caption_revision', 'caption', 'caption', $caption_field_revision);
 }
+
+/**
+ * Move the instance setting from ['image_field_caption'] to ['image_field_caption']['enabled'].
+ * Reason: ['image_field_caption'] becomes the wrapper for additional settings.
+ */
+function image_field_caption_update_7204() {
+  // Note: requires Drupal 7.22 or newer as field_info_field_map()
+  // function was introduce in 7.22.
+
+  // Grab all of the fields.
+  $fields = field_info_field_map();
+  foreach ($fields as $field_name => $field) {
+    // Only modify 'image' type fields.
+    if ($field['type'] == 'image') {
+      foreach ($field['bundles'] as $entity_type => $bundles) {
+        foreach ($bundles as $bundle) {
+          // Load the instance.
+          $instance = field_info_instance($entity_type, $field_name, $bundle);
+          // If the setting is not an array, then it is an old settings.
+          if (isset($instance['settings']['image_field_caption']) && !is_array($instance['settings']['image_field_caption'])) {
+            $enabled_value = $instance['settings']['image_field_caption'];
+            unset($instance['settings']['image_field_caption']);
+            $instance['settings']['image_field_caption'] = array(
+              'enabled' => $enabled_value,
+            );
+            field_update_instance($instance);
+          }
+        }
+      }
+    }
+  }
+}
