@@ -183,6 +183,7 @@ function image_field_caption_field_attach_update($entity_type, $entity) {
     $revision_name = 'field_image_field_caption_revision';
 
     $all_languages = field_available_languages($entity_type, $field);
+    if (!isset($entity->$field_name)) { continue; }
     $field_languages = array_intersect($all_languages, array_keys((array) $entity->$field_name));
 
     // Delete and insert, rather than update, in case a value was added.
