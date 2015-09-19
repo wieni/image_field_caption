@@ -175,9 +175,13 @@ function image_field_caption_field_attach_update($entity_type, $entity) {
   $image_fields = image_field_caption_get_image_fields($entity_type, $bundle);
 
   foreach ($image_fields as $field_name => $image_field) {
-    if (!$image_field['settings']['image_field_caption']['enabled']) {
-      continue;
-    }
+
+    // Skip the caption when it isn't present, or if it is disabled.
+    if (
+      !isset($image_field['settings']['image_field_caption']) ||
+      !$image_field['settings']['image_field_caption']['enabled']
+    ) { continue; }
+
     $field = field_info_field($field_name);
     $table_name = 'field_image_field_caption';
     $revision_name = 'field_image_field_caption_revision';
