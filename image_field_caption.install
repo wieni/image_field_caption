@@ -434,3 +434,33 @@ function image_field_caption_update_7204() {
     }
   }
 }
+
+/**
+ * Set image_field_caption_wrapper defaults on field instances.
+ */
+function image_field_caption_update_7205() {
+  // Grab all of the fields.
+  $fields = field_info_field_map();
+  foreach ($fields as $field_name => $field) {
+    // Only modify 'image' type fields.
+    if ($field['type'] == 'image') {
+      foreach ($field['bundles'] as $entity_type => $bundles) {
+        foreach ($bundles as $bundle) {
+          // Load the instance.
+          $instance = field_info_instance($entity_type, $field_name, $bundle);
+          if (!isset($instance['settings']['image_field_caption']['image_field_caption_wrapper'])) {
+            $instance['settings']['image_field_caption']['image_field_caption_wrapper'] = array(
+              'image_field_caption_default' => array(
+                'value' => '',
+                'format' => 'plain_text'
+              )
+            );
+            field_update_instance($instance);
+            print "Updated {$field_name}\n";
+          }
+        }
+      }
+    }
+  }
+}
+
