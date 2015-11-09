@@ -13,6 +13,8 @@ function image_field_caption_theme_registry_alter(&$theme_registry) {
   // assembled by theme().
   $theme_registry['image_formatter']['theme path'] = drupal_get_path('module', 'image_field_caption');
   $theme_registry['image_formatter']['function'] = 'image_field_caption_image_formatter';
+  $theme_registry['picture_formatter']['function'] = 'image_field_caption_picture_formatter';
+  $theme_registry['picture_sizes_formatter']['function'] = 'image_field_caption_picture_sizes_formatter';
 }
 
 /**
@@ -20,6 +22,44 @@ function image_field_caption_theme_registry_alter(&$theme_registry) {
  */
 function image_field_caption_image_formatter($variables) {
   $image = theme_image_formatter($variables);
+  // Now that Drupal has rendered the image, if there was a caption let's
+  // render the image and the caption, otherwise just return the already
+  // rendered image.
+  if (isset($variables['item']['image_field_caption']) && !empty($variables['item']['image_field_caption']['value'])) {
+    return theme('image_field_caption', array(
+      'image' => $image,
+      'caption' => check_markup($variables['item']['image_field_caption']['value'], $variables['item']['image_field_caption']['format']),
+    ));
+  }
+  else {
+    return $image;
+  }
+}
+
+/**
+ * Override of theme_picture_formatter().
+ */
+function image_field_caption_picture_formatter($variables) {
+  $image = theme_picture_formatter($variables);
+  // Now that Drupal has rendered the image, if there was a caption let's
+  // render the image and the caption, otherwise just return the already
+  // rendered image.
+  if (isset($variables['item']['image_field_caption']) && !empty($variables['item']['image_field_caption']['value'])) {
+    return theme('image_field_caption', array(
+      'image' => $image,
+      'caption' => check_markup($variables['item']['image_field_caption']['value'], $variables['item']['image_field_caption']['format']),
+    ));
+  }
+  else {
+    return $image;
+  }
+}
+
+/**
+ * Override of theme_picture_sizes_formatter().
+ */
+function image_field_caption_picture_sizes_formatter($variables) {
+  $image = theme_picture_sizes_formatter($variables);
   // Now that Drupal has rendered the image, if there was a caption let's
   // render the image and the caption, otherwise just return the already
   // rendered image.
