@@ -147,6 +147,25 @@ function image_field_caption_field_instance_settings_form($field, $instance) {
     '#weight' => 12,
   );
 
+  $form['image_field_caption_wrapper'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Image field caption settings'),
+    '#weight' => 12.1,
+    '#collapsible' => FALSE,
+    '#collapsed' => FALSE,
+    '#states' => array(
+      'visible' => array(
+        ':input[name="instance[settings][image_field_caption][enabled]"]' => array('checked' => TRUE),
+      ),
+    ),
+  );
+  $form['image_field_caption_wrapper']['image_field_caption_default'] = array(
+    '#type' => 'text_format',
+    '#title' => t('Default caption text'),
+    '#default_value' => $instance['settings']['image_field_caption_wrapper']['image_field_caption_default']['value'],
+    '#format' => $instance['settings']['image_field_caption_wrapper']['image_field_caption_default']['format'],
+    '#weight' => 12.1,
+  );
   return $form;
 }
 
@@ -159,7 +178,8 @@ function image_field_caption_field_widget_form_alter(&$element, &$form_state, $c
     foreach (element_children($element) as $delta) {
       // Add all extra functionality provided by the image widget.
       $element[$delta]['#process'][] = 'image_field_caption_widget_process';
-    }
+      $element[$delta]['#settings']['image_field_caption_default'] = $settings['image_field_caption_wrapper']['image_field_caption_default'];
+   }
   }
 }
 
@@ -170,28 +190,35 @@ function image_field_caption_field_widget_form_alter(&$element, &$form_state, $c
  */
 function image_field_caption_widget_process($element, &$form_state, $form) {
   $item = $element['#value'];
-
-  // Add the caption field with its value and text format.
+  // Add the caption field with its value and text format. If there is no file
+  // uri then we'll use the instance setting defaults, otherwise there is no
+  // way to tell if this is a new image or not.
   $element['image_field_caption'] = array(
     '#title' => t('Caption'),
     '#type' => 'text_format',
-    '#default_value' => isset($item['image_field_caption']) ? $item['image_field_caption']['value'] : '',
+    '#default_value' => isset($item['uri']) ? $item['image_field_caption']['value'] : $element['#settings']['image_field_caption_default']['value'],
     '#access' => (bool) $item['fid'],
-    '#format' => isset($item['image_field_caption']['format']) ? $item['image_field_caption']['format'] : NULL,
+    '#format' => isset($item['uri']) ? $item['image_field_caption']['format'] : $element['#settings']['image_field_caption_default']['format'],
   );
-
   return $element;
 }
 
 function image_field_caption_field_info_alter(&$info) {
   // Add a setting to all field types.
   foreach ($info as $field_type => $field_type_info) {
-    if ($field_type == 'image')
-    $info['image']['instance_settings'] += array(
-      'image_field_caption' => array(
-        'enabled' => 0,
-      )
-    );
+    if ($field_type == 'image') {
+      $info['image']['instance_settings'] += array(
+        'image_field_caption' => array(
+          'enabled' => 0,
+        ),
+        'image_field_caption_wrapper' => array(
+          'image_field_caption_default' => array(
+            'value' => '',
+            'format' => filter_default_format(),
+          ),
+        ),
+      );
+    }
   }
 }
 
@@ -317,9 +344,10 @@ function image_field_caption_field_attach_load($entity_type, $entities, $age, $o
 
     foreach ($results as $row) {
       $field = field_info_instance($entity_type, $row->field_name, $bundle);
-      if (!$field['settings']['image_field_caption']) {
-        continue;
-      }
+      if (
+        !isset($field['settings']['image_field_caption']) ||
+        !$field['settings']['image_field_caption']['enabled']
+      ) { continue; }
 
       $item['image_field_caption']['value'] = $row->caption;
       $item['image_field_caption']['format'] = $row->caption_format;
