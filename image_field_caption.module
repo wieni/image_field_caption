@@ -196,9 +196,9 @@ function image_field_caption_widget_process($element, &$form_state, $form) {
   $element['image_field_caption'] = array(
     '#title' => t('Caption'),
     '#type' => 'text_format',
-    '#default_value' => isset($item['uri']) ? $item['image_field_caption']['value'] : $element['#settings']['image_field_caption_default']['value'],
+    '#default_value' => isset($item['image_field_caption']['value']) ? $item['image_field_caption']['value'] : $element['#settings']['image_field_caption_default']['value'],
     '#access' => (bool) $item['fid'],
-    '#format' => isset($item['uri']) ? $item['image_field_caption']['format'] : $element['#settings']['image_field_caption_default']['format'],
+    '#format' => isset($item['image_field_caption']['format']) ? $item['image_field_caption']['format'] : $element['#settings']['image_field_caption_default']['format']
   );
   return $element;
 }
