@@ -1,0 +1,9 @@
+name: Image Field Caption
+description: 'Provides a caption textarea for image fields.'
+package: Other
+
+dependencies:
+  - image:image
+
+type: module
+core: 8.x

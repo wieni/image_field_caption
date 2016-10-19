@@ -5,447 +5,302 @@
  * Provides a caption textarea for image fields.
  */
 
+use Drupal\Core\Entity\EntityInterface;
+use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\Core\Field\FieldDefinitionInterface;
+use Drupal\Core\Form\FormStateInterface;
+use Drupal\image_field_caption\ImageCaptionStorage;
+
+// @todo Support for Views, maybe built in in D8?
+// @todo Support for Features, to be able to export the configuration, if needed.
+// @todo Support the revision management.
+
 /**
- * Implements hook_theme_registry_alter().
+ * Implements hook_field_info_alter().
  */
-function image_field_caption_theme_registry_alter(&$theme_registry) {
-  // Override the image_formatter function and add caption as a variable to be
-  // assembled by theme().
-  $theme_registry['image_formatter']['theme path'] = drupal_get_path('module', 'image_field_caption');
-  $theme_registry['image_formatter']['function'] = 'image_field_caption_image_formatter';
-  $theme_registry['picture_formatter']['function'] = 'image_field_caption_picture_formatter';
-  $theme_registry['picture_sizes_formatter']['function'] = 'image_field_caption_picture_sizes_formatter';
+function image_field_caption_field_info_alter(&$info) {
+  // Set a new class for the image fields.
+  $info['image']['class'] = '\Drupal\image_field_caption\ImageCaptionItem';
 }
 
 /**
- * Override of theme_image_formatter().
+ * Implements hook_form_FORM_ID_alter() for 'field_config_edit_form'.
  */
-function image_field_caption_image_formatter($variables) {
-  $image = theme_image_formatter($variables);
-  // Now that Drupal has rendered the image, if there was a caption let's
-  // render the image and the caption, otherwise just return the already
-  // rendered image.
-  if (isset($variables['item']['image_field_caption']) && !empty($variables['item']['image_field_caption']['value'])) {
-    return theme('image_field_caption', array(
-      'image' => $image,
-      'caption' => check_markup($variables['item']['image_field_caption']['value'], $variables['item']['image_field_caption']['format']),
-    ));
-  }
-  else {
-    return $image;
-  }
-}
-
-/**
- * Override of theme_picture_formatter().
- */
-function image_field_caption_picture_formatter($variables) {
-  $image = theme_picture_formatter($variables);
-  // Now that Drupal has rendered the image, if there was a caption let's
-  // render the image and the caption, otherwise just return the already
-  // rendered image.
-  if (isset($variables['item']['image_field_caption']) && !empty($variables['item']['image_field_caption']['value'])) {
-    return theme('image_field_caption', array(
-      'image' => $image,
-      'caption' => check_markup($variables['item']['image_field_caption']['value'], $variables['item']['image_field_caption']['format']),
-    ));
-  }
-  else {
-    return $image;
+function image_field_caption_form_field_config_edit_form_alter(&$form, FormStateInterface $form_state, $form_id) {
+  // Get the entity.
+  $entity = $form_state->getFormObject()->getEntity();
+  // Check if the field is an image field.
+  if ($entity->get('field_type') == 'image') {
+    // Adds new submit callback function.
+    $form['actions']['submit']['#submit'][] = '_image_field_caption_form_field_config_edit_submit';
   }
 }
 
 /**
- * Override of theme_picture_sizes_formatter().
+ * Custom form submit callback for 'field_config_edit_form'.
  */
-function image_field_caption_picture_sizes_formatter($variables) {
-  $image = theme_picture_sizes_formatter($variables);
-  // Now that Drupal has rendered the image, if there was a caption let's
-  // render the image and the caption, otherwise just return the already
-  // rendered image.
-  if (isset($variables['item']['image_field_caption']) && !empty($variables['item']['image_field_caption']['value'])) {
-    return theme('image_field_caption', array(
-      'image' => $image,
-      'caption' => check_markup($variables['item']['image_field_caption']['value'], $variables['item']['image_field_caption']['format']),
-    ));
+function _image_field_caption_form_field_config_edit_submit($form, FormStateInterface $form_state) {
+  // Get the entity.
+  $entity = $form_state->getFormObject()->getEntity();
+  // Save the field settings related to the caption.
+  $field_storage = Drupal::entityTypeManager()->getStorage('field_config')->load($entity->get('entity_type') . '.' . $entity->get('bundle') . '.' . $entity->get('field_name'));
+  if (!empty($field_storage)) {
+    // Get form values.
+    $values = $form_state->getValues();
+    // Set and save settings.
+    $field_storage->setSetting('caption_field', $values['settings']['image_caption_field']);
+    $field_storage->setSetting('caption_field_required', $values['settings']['image_caption_field_required']);
+    $field_storage->save();
   }
   else {
-    return $image;
+    // Set message text.
+    $message = t('Unable to load the field config of the %field_name field.', array(
+      '%field_name' => $entity->get('entity_type') . '.' . $entity->get('bundle') . '.' . $entity->get('field_name'),
+    ));
+    // Add user message.
+    drupal_set_message($message, 'error');
+    // Add log entry.
+    Drupal::logger('image_field_caption')->error($message);
   }
+}
+
+/**
+ * Implements hook_field_widget_form_alter().
+ */
+function image_field_caption_field_widget_form_alter(&$element, FormStateInterface $form_state, $context) {
+  // Get the current field definition.
+  $field = $context['items']->getFieldDefinition();
+  // If the current field is an image field.
+  if ($field->getType() == 'image') {
+    // Get the current field settings.
+    $settings = $field->getSettings();
+    // Check if the current field has the caption.
+    if (!empty($settings['caption_field'])) {
+      $element['#process'][] = '_image_field_caption_widget_process';
+    }
+  }
+}
+
+/**
+ * Custom callback function for the #process of an image field type.
+ */
+function _image_field_caption_widget_process($element, &$form_state, $form) {
+  // Get the entity.
+  $entity = $form_state->getFormObject()->getEntity();
+  // Get the fields definitions.
+  $field_definitions = $entity->getFieldDefinitions();
+  // Get the current field definition.
+  $field_definition = (!empty($field_definitions[$element['#field_name']])) ? $field_definitions[$element['#field_name']] : NULL;
+  // Get the current field settings.
+  $settings = array();
+  if (!empty($field_definition)) {
+    $settings = $field_definition->getSettings();
+  }
+  // Get the current field values (form state).
+  $field_values = $form_state->getValues();
+  $field_value = $field_values[$element['#field_name']][$element['#delta']]['image_field_caption'];
+  // Add the additional caption fields.
+  $element['image_field_caption'] = array(
+    '#title' => t('Caption'),
+    '#type' => 'text_format',
+    '#default_value' => (!empty($element['#value']['caption'])) ? $element['#value']['caption'] : '',
+    '#access' => (bool) $element['#value']['fids'],
+    '#format' => (!empty($field_value['format'])) ? $field_value['format'] : ((!empty($element['#value']['caption_format'])) ? $element['#value']['caption_format'] : NULL),
+    '#value' => (!empty($field_value['value'])) ? $field_value['value'] : ((!empty($element['#value']['caption'])) ? $element['#value']['caption'] : NULL),
+    '#required' => (!empty($settings['caption_field_required'])) ? TRUE : FALSE,
+  );
+  return $element;
 }
 
 /**
  * Implements hook_theme().
  */
-function image_field_caption_theme($existing, $type, $theme, $path) {
+function image_field_caption_theme() {
   return array(
-    'image_field_caption' => array(
-      'template' => 'image_field_caption',
-      'variables' => array('image' => NULL, 'caption' => NULL),
+    'image_caption_formatter' => array(
+      // As we extend the default image format, the variables passed to the callback function
+      // are the same than the original "callback" function ("image_formatter").
+      'variables' => array('item' => NULL, 'item_attributes' => NULL, 'url' => NULL, 'image_style' => NULL),
     ),
   );
 }
 
 /**
- * Given an entity type and bundle name, this will return an associative array
- * of image field info instances, keyed by image field machine names. Returns
- * null if no image fields are found.
- */
-function image_field_caption_get_image_fields($entity_type = NULL, $bundle = NULL) {
-  // TODO: As of Drupal 7.22 use field_info_field_map() instead of field_info_instances();
-  $image_fields = array();
-  $fields = field_info_instances($entity_type, $bundle);
-  foreach ($fields as $field_name => $field) {
-    // Skip any deleted and non image widget fields.
-    if ($field['deleted'] == 1) {
-      continue;
-    }
-
-    $field_info = field_info_field($field_name);
-    if ($field_info['type'] != 'image') {
-      continue;
-    }
-    $image_fields[$field_name] = $field;
-  }
-
-  return $image_fields;
-}
-
-/**
- * Implements hook_form_alter().
- */
-function image_field_caption_form_field_ui_field_edit_form_alter(&$form, $form_state) {
-  $instance = $form['#instance'];
-  $field = $form['#field'];
-
-  if ($field['type'] == 'image') {
-    $field = $form['#field'];
-    if (empty($form['instance']['settings'])) {
-      $form['instance']['settings'] = array();
-    }
-    $form['instance']['settings'] += image_field_caption_field_instance_settings_form($field, $instance);
-  }
-}
-
-/**
- * Configuration form for editing insert settings for a field instance.
- */
-function image_field_caption_field_instance_settings_form($field, $instance) {
-  $form['image_field_caption'] = array(
-    '#type' => 'fieldset',
-    '#title' => t('Caption Settings'),
-    '#weight' => 12,
-    '#collapsible' => FALSE,
-    '#collapsed' => FALSE,
-  );
-
-  $form['image_field_caption']['enabled'] = array(
-    '#type' => 'checkbox',
-    '#title' => t('Enable Caption'),
-    '#default_value' => $instance['settings']['image_field_caption']['enabled'],
-    '#description' => t('Adds an extra text area for captions on image fields.'),
-    '#weight' => 12,
-  );
-
-  $form['image_field_caption_wrapper'] = array(
-    '#type' => 'fieldset',
-    '#title' => t('Image field caption settings'),
-    '#weight' => 12.1,
-    '#collapsible' => FALSE,
-    '#collapsed' => FALSE,
-    '#states' => array(
-      'visible' => array(
-        ':input[name="instance[settings][image_field_caption][enabled]"]' => array('checked' => TRUE),
-      ),
-    ),
-  );
-  $form['image_field_caption_wrapper']['image_field_caption_default'] = array(
-    '#type' => 'text_format',
-    '#title' => t('Default caption text'),
-    '#default_value' => $instance['settings']['image_field_caption_wrapper']['image_field_caption_default']['value'],
-    '#format' => $instance['settings']['image_field_caption_wrapper']['image_field_caption_default']['format'],
-    '#weight' => 12.1,
-  );
-  return $form;
-}
-
-function image_field_caption_field_widget_form_alter(&$element, &$form_state, $context) {
-  // Add display_field setting to field because file_field_widget_form() assumes it is set.
-  $instance = $context['instance'];
-  $settings = $instance['settings'];
-  $field = $context['field'];
-  if (isset($settings['image_field_caption']['enabled']) && $field['type'] == 'image' && $settings['image_field_caption']['enabled']) {
-    foreach (element_children($element) as $delta) {
-      // Add all extra functionality provided by the image widget.
-      $element[$delta]['#process'][] = 'image_field_caption_widget_process';
-      $element[$delta]['#settings']['image_field_caption_default'] = $settings['image_field_caption_wrapper']['image_field_caption_default'];
-   }
-  }
-}
-
-/**
- * An element #process callback for the image field type.
+ * Prepares variables for image caption formatter templates.
  *
- * Expands the image type to include the caption.
+ * Default template: image-caption-formatter.html.twig.
+ *
+ * @param array $variables
+ *   An associative array containing all values from the original function (template_preprocess_image_formatter())
+ *   and also:
+ *   - caption: An optional caption text.
  */
-function image_field_caption_widget_process($element, &$form_state, $form) {
-  $item = $element['#value'];
-  // Add the caption field with its value and text format. If there is no file
-  // uri then we'll use the instance setting defaults, otherwise there is no
-  // way to tell if this is a new image or not.
-  $element['image_field_caption'] = array(
-    '#title' => t('Caption'),
-    '#type' => 'text_format',
-    '#default_value' => isset($item['image_field_caption']['value']) ? $item['image_field_caption']['value'] : $element['#settings']['image_field_caption_default']['value'],
-    '#access' => (bool) $item['fid'],
-    '#format' => isset($item['image_field_caption']['format']) ? $item['image_field_caption']['format'] : $element['#settings']['image_field_caption_default']['format']
-  );
-  return $element;
-}
-
-function image_field_caption_field_info_alter(&$info) {
-  // Add a setting to all field types.
-  foreach ($info as $field_type => $field_type_info) {
-    if ($field_type == 'image') {
-      $info['image']['instance_settings'] += array(
-        'image_field_caption' => array(
-          'enabled' => 0,
-        ),
-        'image_field_caption_wrapper' => array(
-          'image_field_caption_default' => array(
-            'value' => '',
-            'format' => filter_default_format(),
-          ),
-        ),
-      );
-    }
+function template_preprocess_image_caption_formatter(&$variables) {
+  // Prepare the variables array with the original function.
+  template_preprocess_image_formatter($variables);
+  // Set the caption value.
+  $values = $variables['item']->getValue();
+  if (!empty($values['caption'])) {
+    $variables['caption'] = $values['caption'];
   }
 }
 
 /**
- * Implements hook_field_attach_insert().
+ * Implements hook_entity_load().
  */
-function image_field_caption_field_attach_insert($entity_type, $entity) {
-  image_field_caption_field_attach_update($entity_type, $entity);
-}
-
-/**
- * Implements hook_field_attach_update().
- */
-function image_field_caption_field_attach_update($entity_type, $entity) {
-  list($id, $vid, $bundle) = entity_extract_ids($entity_type, $entity);
-
-  if (!isset($vid)) {
-    $vid = $id;
-  }
-
-  $image_fields = image_field_caption_get_image_fields($entity_type, $bundle);
-
-  foreach ($image_fields as $field_name => $image_field) {
-
-    // Skip the caption when it isn't present, or if it is disabled.
-    if (
-      !isset($image_field['settings']['image_field_caption']) ||
-      !$image_field['settings']['image_field_caption']['enabled']
-    ) { continue; }
-
-    $field = field_info_field($field_name);
-    $table_name = 'field_image_field_caption';
-    $revision_name = 'field_image_field_caption_revision';
-
-    $all_languages = field_available_languages($entity_type, $field);
-    if (!isset($entity->$field_name)) { continue; }
-    $field_languages = array_intersect($all_languages, array_keys((array) $entity->$field_name));
-
-    // Delete and insert, rather than update, in case a value was added.
-    // Delete languages present in the incoming $entity->$field_name.
-    // Delete all languages if $entity->$field_name is empty.
-    $languages = !empty($entity->$field_name) ? $field_languages : $all_languages;
-    if ($languages) {
-      db_delete($table_name)
-        ->condition('field_name', $field_name)
-        ->condition('entity_type', $entity_type)
-        ->condition('entity_id', $id)
-        ->condition('language', $languages, 'IN')
-        ->execute();
-      db_delete($revision_name)
-        ->condition('field_name', $field_name)
-        ->condition('entity_type', $entity_type)
-        ->condition('entity_id', $id)
-        ->condition('revision_id', $vid)
-        ->condition('language', $languages, 'IN')
-        ->execute();
-    }
-
-    // Prepare the multi-insert query.
-    $do_insert = FALSE;
-    $columns = array('field_name', 'entity_type', 'entity_id', 'revision_id', 'bundle', 'delta', 'language', 'caption', 'caption_format');
-    $query = db_insert($table_name)->fields($columns);
-    $revision_query = db_insert($revision_name)->fields($columns);
-
-    foreach ($field_languages as $langcode) {
-
-      $items = (array) $entity->{$field_name}[$langcode];
-      $delta_count = 0;
-      foreach ($items as $delta => $item) {
-        // We now know we have someting to insert.
-        $do_insert = TRUE;
-        $record = array(
-          'field_name' => $field_name,
-          'entity_type' => $entity_type,
-          'entity_id' => $id,
-          'revision_id' => $vid,
-          'bundle' => $bundle,
-          'delta' => $delta,
-          'language' => $langcode,
-          'caption' => $item['image_field_caption']['value'],
-          'caption_format' => $item['image_field_caption']['format'],
-        );
-        $query->values($record);
-        if (isset($vid)) {
-          $revision_query->values($record);
+function image_field_caption_entity_load(array $entities, $entity_type_id) {
+  foreach ($entities as $entity) {
+    // For a fieldable entity.
+    if (($entity instanceof FieldableEntityInterface)) {
+      // Get the field names of all image fields.
+      $field_names = _image_field_caption_get_image_field_names($entity);
+      foreach ($field_names as $field_name) {
+        // Load all values for this field.
+        $values = $entity->get($field_name)->getValue();
+        foreach ($values as $delta => $value) {
+          // Get the caption associated to this field.
+          $caption = ImageCaptionStorage::getCaption(
+            $entity->getEntityTypeId(),
+            $entity->bundle(),
+            $field_name,
+            $entity->id(),
+            $entity->getRevisionId(),
+            $entity->language()->getId(),
+            $delta
+          );
+          // Set the caption value.
+          if (!empty($caption)) {
+            $values[$delta] = $values[$delta] + $caption;
+          }
         }
+        // Save all values.
+        $entity->get($field_name)->setValue($values);
+      }
+    }
+  }
+}
 
-        if ($field['cardinality'] != FIELD_CARDINALITY_UNLIMITED && ++$delta_count == $field['cardinality']) {
-          break;
+/**
+ * Implements hook_entity_insert().
+ */
+function image_field_caption_entity_insert(EntityInterface $entity) {
+  image_field_caption_entity_update($entity);
+}
+
+/**
+ * Implements hook_entity_update().
+ */
+function image_field_caption_entity_update(EntityInterface $entity) {
+  // For a fieldable entity.
+  if (($entity instanceof FieldableEntityInterface)) {
+    // Get the field names of all image fields.
+    $field_names = _image_field_caption_get_image_field_names($entity);
+    foreach ($field_names as $field_name) {
+      // Get the current field settings.
+      $settings = $entity->get($field_name)->getSettings();
+      // If the caption is not enabled => pass this field.
+      if (empty($settings['caption_field'])) {
+        continue;
+      }
+      // Delete the caption associated to this field.
+      ImageCaptionStorage::deleteCaption($entity->getEntityTypeId(), $entity->bundle(), $field_name, $entity->id(), $entity->language()->getId());
+      // Delete the caption revision associated to this field.
+      /*
+      ImageCaptionStorage::deleteCaptionRevision($entity->getEntityTypeId(), $entity->bundle(), $field_name, $entity->id(), $entity->getRevisionId(), $entity->language()->getId());
+      */
+      // Get the current field values.
+      $values = $entity->get($field_name)->getValue();
+      foreach ($values as $delta => $value) {
+        // If a caption text is defined.
+        if (!empty($value['image_field_caption']['value'])) {
+          // Insert the caption associated to this field.
+          // @todo Do the insertion using a multiple query instead several queries into a foreach;
+          ImageCaptionStorage::insertCaption(
+            $entity->getEntityTypeId(),
+            $entity->bundle(),
+            $field_name,
+            $entity->id(),
+            $entity->getRevisionId(),
+            $entity->language()->getId(),
+            $delta,
+            $value['image_field_caption']['value'],
+            $value['image_field_caption']['format']
+          );
+          // Insert the caption revision associated to this field.
+          /*
+          if ($entity->isNewRevision()) {
+            ImageCaptionStorage::insertCaptionRevision(
+              $entity->getEntityTypeId(),
+              $entity->bundle(),
+              $field_name,
+              $entity->id(),
+              $entity->getRevisionId(),
+              $entity->language()->getId(),
+              $delta,
+              $value['image_field_caption']['value'],
+              $value['image_field_caption']['format']
+            );
+          }
+          */
         }
       }
     }
+  }
+}
 
-    // Execute the query if we have values to insert.
-    if ($do_insert) {
-      $query->execute();
-      $revision_query->execute();
+/**
+ * Implements hook_entity_delete().
+ */
+function image_field_caption_entity_delete(EntityInterface $entity) {
+  // For a fieldable entity.
+  if (($entity instanceof FieldableEntityInterface)) {
+    // Get the field names of all image fields.
+    $field_names = _image_field_caption_get_image_field_names($entity);
+    foreach ($field_names as $field_name) {
+      // Delete the caption associated to this field.
+      ImageCaptionStorage::deleteCaption($entity->getEntityTypeId(), $entity->bundle(), $field_name, $entity->id(), $entity->language()->getId());
+      // Delete the caption revisions associated to this field.
+      /*
+      ImageCaptionStorage::deleteCaptionRevisions($entity->getEntityTypeId(), $entity->bundle(), $field_name, $entity->id(), $entity->language()->getId());
+      */
     }
   }
 }
 
 /**
- * Implements hook_field_attach_load().
+ * Implements hook_entity_revision_delete().
  */
-function image_field_caption_field_attach_load($entity_type, $entities, $age, $options) {
-  foreach ($entities as $entity) {
-    list($id, $vid, $bundle) = entity_extract_ids($entity_type, $entity);
-    if (!isset($vid)) {
-      $vid = $id;
-    }
-
-    $load_current = $age == FIELD_LOAD_CURRENT;
-
-    $table = $load_current ? 'field_image_field_caption' : 'field_image_field_caption_revision';
-
-    $query = db_select($table, 't')
-      ->fields('t')
-      ->condition('entity_type', $entity_type)
-      ->condition($load_current ? 'entity_id' : 'revision_id', $load_current ? $id : $vid)
-      ->orderBy('delta');
-
-    $results = $query->execute();
-
-    foreach ($results as $row) {
-      $field = field_info_instance($entity_type, $row->field_name, $bundle);
-      if (
-        !isset($field['settings']['image_field_caption']) ||
-        !$field['settings']['image_field_caption']['enabled']
-      ) { continue; }
-
-      $item['image_field_caption']['value'] = $row->caption;
-      $item['image_field_caption']['format'] = $row->caption_format;
-
-      // Add the item to the field values for the entity.
-      $entities[$row->entity_id]->{$row->field_name}[$row->language][$row->delta]['image_field_caption']['value'] = $row->caption;
-      $entities[$row->entity_id]->{$row->field_name}[$row->language][$row->delta]['image_field_caption']['format'] = $row->caption_format;
+function image_field_caption_entity_revision_delete(EntityInterface $entity) {
+  /*
+  // For a fieldable entity.
+  if (($entity instanceof FieldableEntityInterface)) {
+    // Get the field names of all image fields.
+    $field_names = _image_field_caption_get_image_field_names($entity);
+    if (!empty($field_names)) {
+      // Delete the caption revisions associated to this specific revision.
+      ImageCaptionStorage::deleteCaptionRevisionsByRevisionId($entity->getRevisionId());
     }
   }
+  */
 }
 
 /**
- * Implements hook_field_attach_delete().
+ * Determines the image fields on an entity.
+ *
+ * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
+ *   An entity whose fields to analyze.
+ *
+ * @return array
+ *   The names of the fields on this entity that support formatted text.
  */
-function image_field_caption_field_attach_delete($entity_type, $entity) {
-  list($id, $vid, $bundle) = entity_extract_ids($entity_type, $entity);
-
-  foreach (field_info_instances($entity_type, $bundle) as $instance) {
-    $field = field_info_field_by_id($instance['field_id']);
-    image_field_caption_field_attach_purge($entity_type, $entity, $field, $instance);
+function _image_field_caption_get_image_field_names(FieldableEntityInterface $entity) {
+  // Check if fields definitions are available.
+  $field_definitions = $entity->getFieldDefinitions();
+  if (empty($field_definitions)) {
+    return array();
   }
-}
-
-/**
- * Implements hook_field_attach_purge().
- */
-function image_field_caption_field_attach_purge($entity_type, $entity, $field, $instance) {
-  list($id, $vid, $bundle) = entity_extract_ids($entity_type, $entity);
-
-  $table_name = 'field_image_field_caption';
-  $revision_name = 'field_image_field_caption_revision';
-  db_delete($table_name)
-    ->condition('entity_type', $entity_type)
-    ->condition('entity_id', $id)
-    ->execute();
-  db_delete($revision_name)
-    ->condition('entity_type', $entity_type)
-    ->condition('entity_id', $id)
-    ->execute();
-}
-
-
-/**
- * Implements hook_field_attach_delete_revision().
- */
-function image_field_caption_field_attach_delete_revision($entity_type, $entity) {
-  list($id, $vid, $bundle) = entity_extract_ids($entity_type, $entity);
-
-  if (isset($vid)) {
-    $revision_name = 'field_image_field_caption_revision';
-    db_delete($revision_name)
-      ->condition('entity_type', $entity_type)
-      ->condition('entity_id', $id)
-      ->condition('revision_id', $vid)
-      ->execute();
-  }
-}
-
-/**
- * Implements field_diff_view_alter().
- */
-function image_field_caption_field_diff_view_alter(&$values, $items, $context) {
-  $field = $context['field'];
-  $instance = $context['instance'];
-  $settings = $context['settings'];
-
-  // Only handle image fields
-  if ($field['type'] != 'image' || !$instance['settings']['image_field_caption']) {
-    return;
-  }
-
-  foreach ($items as $delta => $item) {
-    $format_id = empty($item['image_field_caption']['format']) ? filter_fallback_format() : $item['image_field_caption']['format'];
-    if ($format = filter_format_load($format_id)) {
-      $format_text = $format->name;
-    }
-    else {
-      $format_text = t('Missing format !format', array('!format' => $format_id));
-    }
-
-    if (!is_array($values[$delta])) {
-      $values[$delta] = array($values[$delta]);
-    }
-
-    $values[$delta][] = t('Caption (!text_format):', array('!text_format' => $format_text));
-
-    // Allow users to optionally clean system specific characters.
-    $values[$delta][] = diff_normalise_text($item['image_field_caption']['value']);
-  }
-}
-
-
-/**
- * Implements of hook_views_api().
- */
-function image_field_caption_views_api() {
-  return array(
-    'api' => 3,
-    'path' => drupal_get_path('module', 'image_field_caption') . '/views',
-  );
+  // Only return image fields.
+  return array_keys(array_filter($field_definitions, function (FieldDefinitionInterface $definition) {
+    return in_array($definition->getType(), array('image'), TRUE);
+  }));
 }
