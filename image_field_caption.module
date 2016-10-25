@@ -98,7 +98,7 @@ function _image_field_caption_widget_process($element, &$form_state, $form) {
   }
   // Get the current field values (form state).
   $field_values = $form_state->getValues();
-  $field_value = $field_values[$element['#field_name']][$element['#delta']]['image_field_caption'];
+  $field_value = (isset($field_values[$element['#field_name']][$element['#delta']]['image_field_caption'])) ? $field_values[$element['#field_name']][$element['#delta']]['image_field_caption'] : array();
   // Add the additional caption fields.
   $element['image_field_caption'] = array(
     '#title' => t('Caption'),
