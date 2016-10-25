@@ -12,7 +12,6 @@ use Drupal\Core\Form\FormStateInterface;
 use Drupal\image_field_caption\ImageCaptionStorage;
 
 // @todo Support for Views, maybe built in in D8?
-// @todo Support for Features, to be able to export the configuration, if needed.
 // @todo Support the revision management.
 
 /**
