@@ -158,12 +158,13 @@ function image_field_caption_entity_load(array $entities, $entity_type_id) {
         $values = $entity->get($field_name)->getValue();
         foreach ($values as $delta => $value) {
           // Get the caption associated to this field.
+          $revision_id = (empty($entity->getRevisionId()) ? $entity->id() : $entity->getRevisionId());
           $caption = ImageCaptionStorage::getCaption(
             $entity->getEntityTypeId(),
             $entity->bundle(),
             $field_name,
             $entity->id(),
-            $entity->getRevisionId(),
+            $revision_id,
             $entity->language()->getId(),
             $delta
           );
@@ -214,12 +215,13 @@ function image_field_caption_entity_update(EntityInterface $entity) {
         if (!empty($value['image_field_caption']['value'])) {
           // Insert the caption associated to this field.
           // @todo Do the insertion using a multiple query instead several queries into a foreach;
+          $revision_id = (empty($entity->getRevisionId()) ? $entity->id() : $entity->getRevisionId());
           ImageCaptionStorage::insertCaption(
             $entity->getEntityTypeId(),
             $entity->bundle(),
             $field_name,
             $entity->id(),
-            $entity->getRevisionId(),
+            $revision_id,
             $entity->language()->getId(),
             $delta,
             $value['image_field_caption']['value'],
@@ -233,7 +235,7 @@ function image_field_caption_entity_update(EntityInterface $entity) {
               $entity->bundle(),
               $field_name,
               $entity->id(),
-              $entity->getRevisionId(),
+              $revision_id,
               $entity->language()->getId(),
               $delta,
               $value['image_field_caption']['value'],
