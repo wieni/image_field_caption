@@ -7,8 +7,10 @@
 
 namespace Drupal\image_field_caption;
 
-use Drupal\Core\Database\Database;
-use Drupal\Core\Entity\EntityInterface;
+use Drupal\Core\Database\Connection;
+use Drupal\Core\Cache\CacheBackendInterface;
+use Drupal\Core\Cache\Cache;
+use Drupal\Core\Cache\CacheTagsInvalidator;
 
 /**
  * Storage controller class for image captions.
@@ -19,16 +21,57 @@ use Drupal\Core\Entity\EntityInterface;
 class ImageCaptionStorage {
 
   /**
+   * The Cache Backend.
+   *
+   * @var CacheBackendInterface
+   */
+  protected $cacheBackend;
+
+  /**
+   * The Cache Tags Invalidator.
+   *
+   * @var CacheTagsInvalidator
+   */
+  protected $cacheTagsInvalidator;
+
+  /**
+   * The database connection.
+   *
+   * @var \Drupal\Core\Database\Connection
+   */
+  protected $database;
+
+  /**
    * The name of the data table.
+   *
    * @var string
    */
-  private static $_table_data = 'image_field_caption';
+  protected $tableData = 'image_field_caption';
 
   /**
    * The name of the revision table.
+   *
    * @var string
    */
-  private static $_table_revision = 'image_field_caption_revision';
+  protected $tableRevision = 'image_field_caption_revision';
+
+  /**
+   * AbstractService constructor.
+   *
+   * @param \Drupal\Core\Cache\CacheBackendInterface $cacheBackend
+   *   The Cache Backend.
+   * @param \Drupal\Core\Database\Connection $database
+   *   The Database.
+   */
+  public function __construct(
+        CacheBackendInterface $cacheBackend,
+        CacheTagsInvalidator $cacheTagsInvalidator,
+        Connection $database
+    ) {
+    $this->cacheBackend = $cacheBackend;
+    $this->cacheTagsInvalidator = $cacheTagsInvalidator;
+    $this->database = $database;
+  }
 
   /**
    * Check if a caption is already defined for the specified arguments.
@@ -38,24 +81,21 @@ class ImageCaptionStorage {
    * @param string $bundle
    *   The bundle, like 'article' or 'news'.
    * @param string $field_name
-   *   The field name of the image field, like 'field_image' or 'field_article_image'.
-   * @param integer $entity_id
+   *   The field name of the image field,
+   *   like 'field_image' or 'field_article_image'.
+   * @param int $entity_id
    *   The entity id.
-   * @param integer $revision_id
+   * @param int $revision_id
    *   The revision id.
    * @param string $language
    *   The language key, like 'en' or 'fr'.
-   * @param integer $delta
+   * @param int $delta
    *   The delta of the image field.
-   * @param string $caption
-   *   The caption text.
-   * @param string $caption_format
-   *   The text format of the caption.
    *
    * @return bool
-   *  TRUE if a caption exists or FALSE if not.
+   *   TRUE if a caption exists or FALSE if not.
    */
-  static function isCaption($entity_type, $bundle, $field_name, $entity_id, $revision_id, $language, $delta) {
+  public function isCaption($entity_type, $bundle, $field_name, $entity_id, $revision_id, $language, $delta) {
     return (!empty(self::getCaption($entity_type, $bundle, $field_name, $entity_id, $revision_id, $language, $delta))) ? TRUE : FALSE;
   }
 
@@ -67,14 +107,15 @@ class ImageCaptionStorage {
    * @param string $bundle
    *   The bundle, like 'article' or 'news'.
    * @param string $field_name
-   *   The field name of the image field, like 'field_image' or 'field_article_image'.
-   * @param integer $entity_id
+   *   The field name of the image field,
+   *   like 'field_image' or 'field_article_image'.
+   * @param int $entity_id
    *   The entity id.
-   * @param integer $revision_id
+   * @param int $revision_id
    *   The revision id.
    * @param string $language
    *   The language key, like 'en' or 'fr'.
-   * @param integer $delta
+   * @param int $delta
    *   The delta of the image field.
    *
    * @return array
@@ -83,27 +124,49 @@ class ImageCaptionStorage {
    *   - caption_format: The caption format.
    *   or an empty array, if no value found.
    */
-  static function getCaption($entity_type, $bundle, $field_name, $entity_id, $revision_id, $language, $delta) {
-    $connection = Database::getConnection();
+  public function getCaption($entity_type, $bundle, $field_name, $entity_id, $revision_id, $language, $delta) {
+    $captions = &drupal_static(__FUNCTION__);
 
-    // Query.
-    $query = $connection->select(self::$_table_data, 'ifc')
-      ->fields('ifc', array('caption', 'caption_format'))
-      ->condition('entity_type', $entity_type, '=')
-      ->condition('bundle', $bundle, '=')
-      ->condition('field_name', $field_name, '=')
-      ->condition('entity_id', $entity_id, '=')
-      ->condition('revision_id', $revision_id, '=')
-      ->condition('language', $language, '=')
-      ->condition('delta', $delta, '=')
-      ->execute();
-    // Result.
-    $result = $query->fetchAssoc();
+    $cacheKey = $this->getCacheKey($entity_type, $entity_id, $revision_id, $language, $field_name, $delta);
 
-    // Caption array.
-    $caption = array();
-    if(!empty($result)) {
-      $caption = $result;
+    if (isset($captions[$cacheKey])) {
+      $caption = $captions[$cacheKey];
+    }
+    elseif ($cached = $this->cacheBackend->get($cacheKey)) {
+      $caption = $cached->data;
+    }
+    else {
+      // Query.
+      $query = $this->database->select($this->tableData, 'ifc');
+      $result = $query
+              ->fields('ifc', array('caption', 'caption_format'))
+              ->condition('entity_type', $entity_type, '=')
+              ->condition('bundle', $bundle, '=')
+              ->condition('field_name', $field_name, '=')
+              ->condition('entity_id', $entity_id, '=')
+              ->condition('revision_id', $revision_id, '=')
+              ->condition('language', $language, '=')
+              ->condition('delta', $delta, '=')
+              ->execute()
+              ->fetchAssoc();
+
+      // Caption array.
+      $caption = array();
+      if (!empty($result)) {
+        $caption = $result;
+      }
+
+      // Let the cache depends on the entity.
+      // TODO: Use getCacheTags() to get the default list.
+      $this->cacheBackend->set(
+            $cacheKey,
+            $caption,
+            Cache::PERMANENT,
+            [
+              $field_name,
+              'image_field_caption',
+            ]
+        );
     }
 
     return $caption;
@@ -117,39 +180,38 @@ class ImageCaptionStorage {
    * @param string $bundle
    *   The bundle, like 'article' or 'news'.
    * @param string $field_name
-   *   The field name of the image field, like 'field_image' or 'field_article_image'.
-   * @param integer $entity_id
+   *   The field name of the image field,
+   *   like 'field_image' or 'field_article_image'.
+   * @param int $entity_id
    *   The entity id.
-   * @param integer $revision_id
+   * @param int $revision_id
    *   The revision id.
    * @param string $language
    *   The language key, like 'en' or 'fr'.
-   * @param integer $delta
+   * @param int $delta
    *   The delta of the image field.
    * @param string $caption
    *   The caption text.
    * @param string $caption_format
    *   The text format of the caption.
-   *
-   * @return void
    */
-  static function insertCaption($entity_type, $bundle, $field_name, $entity_id, $revision_id, $language, $delta, $caption, $caption_format) {
-    $connection = Database::getConnection();
+  public function insertCaption($entity_type, $bundle, $field_name, $entity_id, $revision_id, $language, $delta, $caption, $caption_format) {
 
-    // Query.
-    $query = $connection->insert(self::$_table_data)
-      ->fields(array(
-        'entity_type' => $entity_type,
-        'bundle' => $bundle,
-        'field_name' => $field_name,
-        'entity_id' => $entity_id,
-        'revision_id' => $revision_id,
-        'language' => $language,
-        'delta' => $delta,
-        'caption' => $caption,
-        'caption_format' => $caption_format,
-      ))
+    $query = $this->database->insert($this->tableData);
+    $query
+          ->fields(array(
+            'entity_type' => $entity_type,
+            'bundle' => $bundle,
+            'field_name' => $field_name,
+            'entity_id' => $entity_id,
+            'revision_id' => $revision_id,
+            'language' => $language,
+            'delta' => $delta,
+            'caption' => $caption,
+            'caption_format' => $caption_format,
+          ))
       ->execute();
+    $this->clearCache($field_name);
   }
 
   /**
@@ -160,39 +222,37 @@ class ImageCaptionStorage {
    * @param string $bundle
    *   The bundle, like 'article' or 'news'.
    * @param string $field_name
-   *   The field name of the image field, like 'field_image' or 'field_article_image'.
-   * @param integer $entity_id
+   *   The field name of the image field,
+   *   like 'field_image' or 'field_article_image'.
+   * @param int $entity_id
    *   The entity id.
-   * @param integer $revision_id
+   * @param int $revision_id
    *   The revision id.
    * @param string $language
    *   The language key, like 'en' or 'fr'.
-   * @param integer $delta
+   * @param int $delta
    *   The delta of the image field.
    * @param string $caption
    *   The caption text.
    * @param string $caption_format
    *   The text format of the caption.
-   *
-   * @return void
    */
-  static function insertCaptionRevision($entity_type, $bundle, $field_name, $entity_id, $revision_id, $language, $delta, $caption, $caption_format) {
-    $connection = Database::getConnection();
-
-    // Query.
-    $query = $connection->insert(self::$_table_revision)
-      ->fields(array(
-        'entity_type' => $entity_type,
-        'bundle' => $bundle,
-        'field_name' => $field_name,
-        'entity_id' => $entity_id,
-        'revision_id' => $revision_id,
-        'language' => $language,
-        'delta' => $delta,
-        'caption' => $caption,
-        'caption_format' => $caption_format,
-      ))
+  public function insertCaptionRevision($entity_type, $bundle, $field_name, $entity_id, $revision_id, $language, $delta, $caption, $caption_format) {
+    $query = $this->database->insert($this->tableRevision);
+    $query
+          ->fields(array(
+            'entity_type' => $entity_type,
+            'bundle' => $bundle,
+            'field_name' => $field_name,
+            'entity_id' => $entity_id,
+            'revision_id' => $revision_id,
+            'language' => $language,
+            'delta' => $delta,
+            'caption' => $caption,
+            'caption_format' => $caption_format,
+          ))
       ->execute();
+    $this->clearCache($field_name);
   }
 
   /**
@@ -203,25 +263,23 @@ class ImageCaptionStorage {
    * @param string $bundle
    *   The bundle, like 'article' or 'news'.
    * @param string $field_name
-   *   The field name of the image field, like 'field_image' or 'field_article_image'.
-   * @param integer $entity_id
+   *   The field name of the image field, like
+   *   'field_image' or 'field_article_image'.
+   * @param int $entity_id
    *   The entity id.
    * @param string $language
    *   The language key, like 'en' or 'fr'.
-   *
-   * @return void
    */
-  static function deleteCaption($entity_type, $bundle, $field_name, $entity_id, $language) {
-    $connection = Database::getConnection();
-
-    // Query.
-    $query = $connection->delete(self::$_table_data)
-      ->condition('entity_type', $entity_type, '=')
-      ->condition('bundle', $bundle, '=')
-      ->condition('field_name', $field_name, '=')
-      ->condition('entity_id', $entity_id, '=')
-      ->condition('language', $language, '=')
-      ->execute();
+  public function deleteCaption($entity_type, $bundle, $field_name, $entity_id, $language) {
+    $query = $this->database->delete($this->tableData);
+    $query
+          ->condition('entity_type', $entity_type, '=')
+          ->condition('bundle', $bundle, '=')
+          ->condition('field_name', $field_name, '=')
+          ->condition('entity_id', $entity_id, '=')
+          ->condition('language', $language, '=')
+          ->execute();
+    $this->clearCache($field_name);
     // @todo Try to return the count of the affected rows.
   }
 
@@ -233,21 +291,18 @@ class ImageCaptionStorage {
    * @param string $bundle
    *   The bundle, like 'article' or 'news'.
    * @param string $field_name
-   *   The field name of the image field, like 'field_image' or 'field_article_image'.
-   * @param integer $entity_id
+   *   The field name of the image field, like
+   *   'field_image' or 'field_article_image'.
+   * @param int $entity_id
    *   The entity id.
-   * @param integer $revision_id
+   * @param int $revision_id
    *   The revision id.
    * @param string $language
    *   The language key, like 'en' or 'fr'.
-   *
-   * @return void
    */
-  static function deleteCaptionRevision($entity_type, $bundle, $field_name, $entity_id, $revision_id, $language) {
-    $connection = Database::getConnection();
-
-    // Query.
-    $query = $connection->delete(self::$_table_revision)
+  public function deleteCaptionRevision($entity_type, $bundle, $field_name, $entity_id, $revision_id, $language) {
+    $query = $this->database->delete($this->tableRevision);
+    $query
       ->condition('entity_type', $entity_type, '=')
       ->condition('bundle', $bundle, '=')
       ->condition('field_name', $field_name, '=')
@@ -255,54 +310,95 @@ class ImageCaptionStorage {
       ->condition('revision_id', $revision_id, '=')
       ->condition('language', $language, '=')
       ->execute();
+    $this->clearCache($field_name);
     // @todo Try to return the count of the affected rows.
   }
 
   /**
-   * Delete all captions revisions from the database for the specified arguments.
+   * Delete all captions revisions for the specified arguments.
    *
    * @param string $entity_type
    *   The entity type, like 'node' or 'comment'.
    * @param string $bundle
    *   The bundle, like 'article' or 'news'.
    * @param string $field_name
-   *   The field name of the image field, like 'field_image' or 'field_article_image'.
-   * @param integer $entity_id
+   *   The field name of the image field, like 'field_image'
+   *   or 'field_article_image'.
+   * @param int $entity_id
    *   The entity id.
    * @param string $language
    *   The language key, like 'en' or 'fr'.
-   *
-   * @return void
    */
-  static function deleteCaptionRevisions($entity_type, $bundle, $field_name, $entity_id, $language) {
-    $connection = Database::getConnection();
-
-    // Query.
-    $query = $connection->delete(self::$_table_revision)
+  public function deleteCaptionRevisions($entity_type, $bundle, $field_name, $entity_id, $language) {
+    $query = $this->database->delete($this->tableRevision);
+    $query
       ->condition('entity_type', $entity_type, '=')
       ->condition('bundle', $bundle, '=')
       ->condition('field_name', $field_name, '=')
       ->condition('entity_id', $entity_id, '=')
       ->condition('language', $language, '=')
       ->execute();
+    $this->clearCache($field_name);
     // @todo Try to return the count of the affected rows.
   }
 
   /**
    * Delete all captions revisions for a specific revision id.
    *
-   * @param integer $revision_id
+   * @param int $revision_id
    *   The revision id.
-   *
-   * @return void
    */
-  static function deleteCaptionRevisionsByRevisionId($revision_id) {
-    $connection = Database::getConnection();
-
-    // Query.
-    $query = $connection->delete(self::$_table_revision)
+  public function deleteCaptionRevisionsByRevisionId($revision_id) {
+    $query = $this->database->delete($this->tableRevision);
+    $query
       ->condition('revision_id', $revision_id, '=')
       ->execute();
+  }
+
+  /**
+   * Clears the cache for a certain field name.
+   *
+   * @param string $field_name
+   *   The field name of the image field, like 'field_image'
+   *   or 'field_article_image'.
+   */
+  public function clearCache($field_name) {
+    $this->cacheTagsInvalidator->invalidateTags([
+      $field_name,
+      'image_field_caption',
+    ]);
+  }
+
+  /**
+   * Constructs the cache key.
+   *
+   * @param string $entity_type
+   *   The entity type, like 'node' or 'comment'.
+   * @param int $entity_id
+   *   The entity id.
+   * @param int $revision_id
+   *   The revision id.
+   * @param string $language
+   *   The language key, like 'en' or 'fr'.
+   * @param string $field_name
+   *   The field name of the image field, like 'field_image'
+   *   or 'field_article_image'.
+   * @param int $delta
+   *   The delta of the image field.
+   */
+  public function getCacheKey($entity_type, $entity_id, $revision_id, $language, $field_name, $delta) {
+    return implode(
+        ":",
+        [
+          'caption',
+          $entity_type,
+          $entity_id,
+          $revision_id,
+          $language,
+          $field_name,
+          $delta,
+        ]
+    );
   }
 
 }

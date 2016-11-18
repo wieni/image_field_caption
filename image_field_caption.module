@@ -148,6 +148,8 @@ function template_preprocess_image_caption_formatter(&$variables) {
  * Implements hook_entity_load().
  */
 function image_field_caption_entity_load(array $entities, $entity_type_id) {
+    $imageCaption = Drupal::service('image_field_caption.storage');
+    
   foreach ($entities as $entity) {
     // For a fieldable entity.
     if (($entity instanceof FieldableEntityInterface)) {
@@ -159,7 +161,7 @@ function image_field_caption_entity_load(array $entities, $entity_type_id) {
         foreach ($values as $delta => $value) {
           // Get the caption associated to this field.
           $revision_id = (empty($entity->getRevisionId()) ? $entity->id() : $entity->getRevisionId());
-          $caption = ImageCaptionStorage::getCaption(
+          $caption = $imageCaption->getCaption(
             $entity->getEntityTypeId(),
             $entity->bundle(),
             $field_name,
@@ -191,6 +193,8 @@ function image_field_caption_entity_insert(EntityInterface $entity) {
  * Implements hook_entity_update().
  */
 function image_field_caption_entity_update(EntityInterface $entity) {
+    $imageCaption = Drupal::service('image_field_caption.storage');
+    
   // For a fieldable entity.
   if (($entity instanceof FieldableEntityInterface)) {
     // Get the field names of all image fields.
@@ -203,10 +207,10 @@ function image_field_caption_entity_update(EntityInterface $entity) {
         continue;
       }
       // Delete the caption associated to this field.
-      ImageCaptionStorage::deleteCaption($entity->getEntityTypeId(), $entity->bundle(), $field_name, $entity->id(), $entity->language()->getId());
+        $imageCaption->deleteCaption($entity->getEntityTypeId(), $entity->bundle(), $field_name, $entity->id(), $entity->language()->getId());
       // Delete the caption revision associated to this field.
       /*
-      ImageCaptionStorage::deleteCaptionRevision($entity->getEntityTypeId(), $entity->bundle(), $field_name, $entity->id(), $entity->getRevisionId(), $entity->language()->getId());
+      $imageCaption->deleteCaptionRevision($entity->getEntityTypeId(), $entity->bundle(), $field_name, $entity->id(), $entity->getRevisionId(), $entity->language()->getId());
       */
       // Get the current field values.
       $values = $entity->get($field_name)->getValue();
@@ -216,7 +220,7 @@ function image_field_caption_entity_update(EntityInterface $entity) {
           // Insert the caption associated to this field.
           // @todo Do the insertion using a multiple query instead several queries into a foreach;
           $revision_id = (empty($entity->getRevisionId()) ? $entity->id() : $entity->getRevisionId());
-          ImageCaptionStorage::insertCaption(
+            $imageCaption->insertCaption(
             $entity->getEntityTypeId(),
             $entity->bundle(),
             $field_name,
@@ -230,7 +234,7 @@ function image_field_caption_entity_update(EntityInterface $entity) {
           // Insert the caption revision associated to this field.
           /*
           if ($entity->isNewRevision()) {
-            ImageCaptionStorage::insertCaptionRevision(
+            $imageCaption->insertCaptionRevision(
               $entity->getEntityTypeId(),
               $entity->bundle(),
               $field_name,
@@ -253,16 +257,18 @@ function image_field_caption_entity_update(EntityInterface $entity) {
  * Implements hook_entity_delete().
  */
 function image_field_caption_entity_delete(EntityInterface $entity) {
+    $imageCaption = Drupal::service('image_field_caption.storage');
+    
   // For a fieldable entity.
   if (($entity instanceof FieldableEntityInterface)) {
     // Get the field names of all image fields.
     $field_names = _image_field_caption_get_image_field_names($entity);
     foreach ($field_names as $field_name) {
       // Delete the caption associated to this field.
-      ImageCaptionStorage::deleteCaption($entity->getEntityTypeId(), $entity->bundle(), $field_name, $entity->id(), $entity->language()->getId());
+      $imageCaption->deleteCaption($entity->getEntityTypeId(), $entity->bundle(), $field_name, $entity->id(), $entity->language()->getId());
       // Delete the caption revisions associated to this field.
       /*
-      ImageCaptionStorage::deleteCaptionRevisions($entity->getEntityTypeId(), $entity->bundle(), $field_name, $entity->id(), $entity->language()->getId());
+      $imageCaption->deleteCaptionRevisions($entity->getEntityTypeId(), $entity->bundle(), $field_name, $entity->id(), $entity->language()->getId());
       */
     }
   }
@@ -272,14 +278,16 @@ function image_field_caption_entity_delete(EntityInterface $entity) {
  * Implements hook_entity_revision_delete().
  */
 function image_field_caption_entity_revision_delete(EntityInterface $entity) {
-  /*
+    // $imageCaption = Drupal::service('image_field_caption.storage');
+    
+    /*
   // For a fieldable entity.
   if (($entity instanceof FieldableEntityInterface)) {
     // Get the field names of all image fields.
     $field_names = _image_field_caption_get_image_field_names($entity);
     if (!empty($field_names)) {
       // Delete the caption revisions associated to this specific revision.
-      ImageCaptionStorage::deleteCaptionRevisionsByRevisionId($entity->getRevisionId());
+      $imageCaption->deleteCaptionRevisionsByRevisionId($entity->getRevisionId());
     }
   }
   */
