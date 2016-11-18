@@ -1,0 +1,14 @@
+{
+    "name": "wieni/image_field_caption",
+    "description": "Adds an extra text area for captions on image fields.",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Wieni",
+            "email": "info@wieni.be"
+        }
+    ],
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "type": "drupal-module"
+}
