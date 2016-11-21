@@ -147,7 +147,7 @@ function template_preprocess_image_caption_formatter(&$variables) {
 /**
  * Implements hook_entity_load().
  */
-function image_field_caption_entity_load(array $entities, $entity_type_id) {
+function image_field_caption_entity_storage_load(array $entities, $entity_type_id) {
     $imageCaption = Drupal::service('image_field_caption.storage');
     
   foreach ($entities as $entity) {
