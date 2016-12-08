@@ -10,7 +10,6 @@ use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Field\FieldDefinitionInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\image_field_caption\ImageCaptionStorage;
-use Drupal\Core\Cache\CacheBackendInterface;
 
 // @todo Support for Views, maybe built in in D8?
 // @todo Support the revision management.
@@ -154,7 +153,7 @@ function image_field_caption_entity_storage_load(array $entities, $entity_type_i
   foreach ($entities as $entity) {
     // For a fieldable entity.
     if (($entity instanceof FieldableEntityInterface)) {
-      // Get the field names of all image fields (this gets cached)
+      // Get the field names of all image fields.
       $field_names = _image_field_caption_get_image_field_names($entity);
       foreach ($field_names as $field_name) {
         // Load all values for this field.
@@ -304,29 +303,13 @@ function image_field_caption_entity_revision_delete(EntityInterface $entity) {
  *   The names of the fields on this entity that support formatted text.
  */
 function _image_field_caption_get_image_field_names(FieldableEntityInterface $entity) {
-  $fieldNames = &drupal_static(__FUNCTION__);
-    
-  $cid = 'image_field_caption_imagefields_' . $entity->bundle();
-    
-  if (!isset($fieldNames[$cid])) {
-      // Check if we have this in cache.
-      if ($cache = \Drupal::cache()->get($cid)) {
-          $fieldNames[$cid] = $cache->data;
-      } else {
-          // Check if fields definitions are available.
-          $field_definitions = $entity->getFieldDefinitions();
-          if (empty($field_definitions)) {
-              $fieldNames[$cid] = array();
-          } else {
-              // Only return image fields.
-              $fieldNames[$cid] = array_keys(array_filter($field_definitions, function (FieldDefinitionInterface $definition) {
-                  return in_array($definition->getType(), array('image'), TRUE);
-              }));
-          }
-    
-          Drupal::cache()->set($cid, $fieldNames[$cid], CacheBackendInterface::CACHE_PERMANENT, array('image_field_caption'));
-      }
+  // Check if fields definitions are available.
+  $field_definitions = $entity->getFieldDefinitions();
+  if (empty($field_definitions)) {
+    return array();
   }
-    
-  return $fieldNames[$cid];
+  // Only return image fields.
+  return array_keys(array_filter($field_definitions, function (FieldDefinitionInterface $definition) {
+    return in_array($definition->getType(), array('image'), TRUE);
+  }));
 }
