@@ -67,8 +67,9 @@ function _image_field_caption_form_field_config_edit_submit($form, FormStateInte
  * Implements hook_field_widget_form_alter().
  */
 function image_field_caption_field_widget_form_alter(&$element, FormStateInterface $form_state, $context) {
-  // Get the current field definition.
+  /** @var \Drupal\field\Entity\FieldConfig $field */
   $field = $context['items']->getFieldDefinition();
+    
   // If the current field is an image field.
   if ($field->getType() == 'image') {
     // Get the current field settings.
@@ -145,41 +146,53 @@ function template_preprocess_image_caption_formatter(&$variables) {
 }
 
 /**
- * Implements hook_entity_load().
+ * Implements hook_entity_storage_load().
  */
 function image_field_caption_entity_storage_load(array $entities, $entity_type_id) {
     $imageCaption = Drupal::service('image_field_caption.storage');
+
+    if (in_array($entity_type_id, $imageCaption->list('entity_type'))) {
+        // This means we already have some captions.. no need to do all kinds
+        // of checking then.
+        
+        /** @var \Drupal\Core\Entity\Entity $entity */
+        foreach ($entities as $entity) {
+            // Same load avoiding check.
+            if (in_array($entity->bundle(), $imageCaption->list('bundle'))) {
+                $needToSave = false;
+                
+                /** @var \Drupal\Core\Field\FieldItemList $field */
+                foreach ($entity->getFields() as $fieldName => $field) {
+                    $values = $entity->get($fieldName)->getValue();
+                    foreach ($values as $delta => $value) {
+                        // Get the caption associated to this field.
+                        $revision_id = (empty($entity->getRevisionId()) ? $entity->id() : $entity->getRevisionId());
+                        $caption = $imageCaption->getCaption(
+                          $entity->getEntityTypeId(),
+                          $entity->bundle(),
+                          $fieldName,
+                          $entity->id(),
+                          $revision_id,
+                          $entity->language()->getId(),
+                          $delta
+                        );
+                        
+                        // Set the caption value.
+                        if (!empty($caption)) {
+                          $values[$delta] = $values[$delta] + $caption;
+                            $needToSave = true;
+                        }
+                    }
     
-  foreach ($entities as $entity) {
-    // For a fieldable entity.
-    if (($entity instanceof FieldableEntityInterface)) {
-      // Get the field names of all image fields.
-      $field_names = _image_field_caption_get_image_field_names($entity);
-      foreach ($field_names as $field_name) {
-        // Load all values for this field.
-        $values = $entity->get($field_name)->getValue();
-        foreach ($values as $delta => $value) {
-          // Get the caption associated to this field.
-          $revision_id = (empty($entity->getRevisionId()) ? $entity->id() : $entity->getRevisionId());
-          $caption = $imageCaption->getCaption(
-            $entity->getEntityTypeId(),
-            $entity->bundle(),
-            $field_name,
-            $entity->id(),
-            $revision_id,
-            $entity->language()->getId(),
-            $delta
-          );
-          // Set the caption value.
-          if (!empty($caption)) {
-            $values[$delta] = $values[$delta] + $caption;
-          }
+                    if ($needToSave) {
+                        // Save all values.
+                        $entity->get($fieldName)->setValue($values);
+                    }
+                }
+
+            }
         }
-        // Save all values.
-        $entity->get($field_name)->setValue($values);
-      }
     }
-  }
 }
 
 /**
