@@ -400,5 +400,26 @@ class ImageCaptionStorage {
         ]
     );
   }
+  
+  public function list($key = 'entity_type') {
+      $list = &drupal_static(__FUNCTION__);
+    
+      if (!isset($list[$key])) {
+          // Query.
+          $query = $this->database->select($this->tableData, 'ifc');
+          $result = $query
+              ->fields('ifc', array($key))
+              ->distinct()
+              ->execute()
+              ->fetchAll();
+    
+          $list[$key] = [];
+          foreach ($result as $row) {
+              $list[$key][] = $row->{$key};
+          }
+      }
+      
+      return $list[$key];
+  }
 
 }
