@@ -142,29 +142,9 @@ function image_field_caption_theme() {
     'image_caption_formatter' => array(
       // As we extend the default image format, the variables passed to the callback function
       // are the same than the original "callback" function ("image_formatter").
-      'variables' => array('item' => NULL, 'item_attributes' => NULL, 'url' => NULL, 'image_style' => NULL),
+      'variables' => array('item' => NULL, 'item_attributes' => NULL, 'url' => NULL, 'image_style' => NULL, 'caption' => NULL),
     ),
   );
-}
-
-/**
- * Prepares variables for image caption formatter templates.
- *
- * Default template: image-caption-formatter.html.twig.
- *
- * @param array $variables
- *   An associative array containing all values from the original function (template_preprocess_image_formatter())
- *   and also:
- *   - caption: An optional caption text.
- */
-function template_preprocess_image_caption_formatter(&$variables) {
-  // Prepare the variables array with the original function.
-  template_preprocess_image_formatter($variables);
-  // Set the caption value.
-  $values = $variables['item']->getValue();
-  if (!empty($values['caption'])) {
-    $variables['caption'] = $values['caption'];
-  }
 }
 
 /**
