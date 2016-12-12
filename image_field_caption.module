@@ -67,8 +67,9 @@ function _image_field_caption_form_field_config_edit_submit($form, FormStateInte
  * Implements hook_field_widget_form_alter().
  */
 function image_field_caption_field_widget_form_alter(&$element, FormStateInterface $form_state, $context) {
-  // Get the current field definition.
+  /** @var \Drupal\field\Entity\FieldConfig $field */
   $field = $context['items']->getFieldDefinition();
+    
   // If the current field is an image field.
   if ($field->getType() == 'image') {
     // Get the current field settings.
@@ -83,31 +84,53 @@ function image_field_caption_field_widget_form_alter(&$element, FormStateInterfa
 /**
  * Custom callback function for the #process of an image field type.
  */
-function _image_field_caption_widget_process($element, &$form_state, $form) {
-  // Get the entity.
-  $entity = $form_state->getFormObject()->getEntity();
-  // Get the fields definitions.
-  $field_definitions = $entity->getFieldDefinitions();
-  // Get the current field definition.
-  $field_definition = (!empty($field_definitions[$element['#field_name']])) ? $field_definitions[$element['#field_name']] : NULL;
-  // Get the current field settings.
-  $settings = array();
-  if (!empty($field_definition)) {
-    $settings = $field_definition->getSettings();
-  }
-  // Get the current field values (form state).
-  $field_values = $form_state->getValues();
-  $field_value = (isset($field_values[$element['#field_name']][$element['#delta']]['image_field_caption'])) ? $field_values[$element['#field_name']][$element['#delta']]['image_field_caption'] : array();
-  // Add the additional caption fields.
-  $element['image_field_caption'] = array(
-    '#title' => t('Caption'),
-    '#type' => 'text_format',
-    '#default_value' => (!empty($element['#value']['caption'])) ? $element['#value']['caption'] : '',
-    '#access' => (bool) $element['#value']['fids'],
-    '#format' => (!empty($field_value['format'])) ? $field_value['format'] : ((!empty($element['#value']['caption_format'])) ? $element['#value']['caption_format'] : NULL),
-    '#value' => (!empty($field_value['value'])) ? $field_value['value'] : ((!empty($element['#value']['caption'])) ? $element['#value']['caption'] : NULL),
-    '#required' => (!empty($settings['caption_field_required'])) ? TRUE : FALSE,
-  );
+function _image_field_caption_widget_process($element, FormStateInterface &$form_state, $form) {
+    $imageCaption = Drupal::service('image_field_caption.storage');
+    
+    /** @var \Drupal\Core\Entity\ContentEntityBase $entity */
+    $entity = $form_state->getFormObject()->getEntity();
+    
+    // No image no caption.
+    if (!$entity->getFieldDefinition($element['#field_name'])) {
+        return $element;
+    }
+    
+    // Get the field settings.
+    $captionSettings = $entity
+        ->getFieldDefinition($element['#field_name'])
+        ->getSettings();
+    
+    $currentValue = $form_state->getValue($element['#field_name']);
+    
+    if (isset($currentValue[$element['#delta']]['image_field_caption'])) {
+        // Get the curval out of form state
+        $caption = [
+            'caption' => $currentValue[$element['#delta']]['image_field_caption']['value'],
+            'format' => $currentValue[$element['#delta']]['image_field_caption']['format']
+        ];
+    } else {
+        // Get the caption out of DB.
+        $caption = $imageCaption->getCaption(
+            $entity->getEntityTypeId(),
+            $entity->bundle(),
+            $element['#field_name'],
+            $entity->id(),
+            empty($entity->getRevisionId()) ? $entity->id() : $entity->getRevisionId(),
+            $entity->language()->getId(),
+            $element['#delta']
+        );
+    }
+    
+    $element['image_field_caption'] = array(
+      '#title' => t('Caption'),
+      '#type' => 'text_format',
+      '#default_value' => (!empty($element['#value']['caption'])) ? $element['#value']['caption'] : '',
+      '#access' => (bool) $element['#value']['fids'],
+      '#format' => (!empty($caption['format']) ? $caption['format']: NULL),
+      '#value' => (!empty($caption['caption']) ? $caption['caption']: NULL),
+      '#required' => (!empty($captionSettings['caption_field_required'])) ? TRUE : FALSE,
+    );
+
   return $element;
 }
 
@@ -119,67 +142,9 @@ function image_field_caption_theme() {
     'image_caption_formatter' => array(
       // As we extend the default image format, the variables passed to the callback function
       // are the same than the original "callback" function ("image_formatter").
-      'variables' => array('item' => NULL, 'item_attributes' => NULL, 'url' => NULL, 'image_style' => NULL),
+      'variables' => array('item' => NULL, 'item_attributes' => NULL, 'url' => NULL, 'image_style' => NULL, 'caption' => NULL),
     ),
   );
-}
-
-/**
- * Prepares variables for image caption formatter templates.
- *
- * Default template: image-caption-formatter.html.twig.
- *
- * @param array $variables
- *   An associative array containing all values from the original function (template_preprocess_image_formatter())
- *   and also:
- *   - caption: An optional caption text.
- */
-function template_preprocess_image_caption_formatter(&$variables) {
-  // Prepare the variables array with the original function.
-  template_preprocess_image_formatter($variables);
-  // Set the caption value.
-  $values = $variables['item']->getValue();
-  if (!empty($values['caption'])) {
-    $variables['caption'] = $values['caption'];
-  }
-}
-
-/**
- * Implements hook_entity_load().
- */
-function image_field_caption_entity_storage_load(array $entities, $entity_type_id) {
-    $imageCaption = Drupal::service('image_field_caption.storage');
-    
-  foreach ($entities as $entity) {
-    // For a fieldable entity.
-    if (($entity instanceof FieldableEntityInterface)) {
-      // Get the field names of all image fields.
-      $field_names = _image_field_caption_get_image_field_names($entity);
-      foreach ($field_names as $field_name) {
-        // Load all values for this field.
-        $values = $entity->get($field_name)->getValue();
-        foreach ($values as $delta => $value) {
-          // Get the caption associated to this field.
-          $revision_id = (empty($entity->getRevisionId()) ? $entity->id() : $entity->getRevisionId());
-          $caption = $imageCaption->getCaption(
-            $entity->getEntityTypeId(),
-            $entity->bundle(),
-            $field_name,
-            $entity->id(),
-            $revision_id,
-            $entity->language()->getId(),
-            $delta
-          );
-          // Set the caption value.
-          if (!empty($caption)) {
-            $values[$delta] = $values[$delta] + $caption;
-          }
-        }
-        // Save all values.
-        $entity->get($field_name)->setValue($values);
-      }
-    }
-  }
 }
 
 /**
