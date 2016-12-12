@@ -29,41 +29,39 @@ class ImageCaptionFormatter extends ImageFormatter {
    */
   public function viewElements(FieldItemListInterface $items, $langcode) {
     $elements = parent::viewElements($items, $langcode);
-      
-  $imageCaption = \Drupal::service('image_field_caption.storage');
-      
+
+    $imageCaption = \Drupal::service('image_field_caption.storage');
+
     foreach ($elements as $delta => $element) {
-        
-        /** @var ImageCaptionItem $image */
-        $image = $element['#item'];
-        
-        $field = $image->getFieldDefinition();
-        $parentEntity = $image->getEntity();
+      /** @var ImageCaptionItem $image */
+      $image = $element['#item'];
 
-        if ($field && $parentEntity) {
-            
-            // Get the caption out of DB.
-            $caption = $imageCaption->getCaption(
-                $parentEntity->getEntityTypeId(),
-                $parentEntity->bundle(),
-                $field->getName(),
-                $parentEntity->id(),
-                empty($parentEntity->getRevisionId()) ? $parentEntity->id() : $parentEntity->getRevisionId(),
-                $parentEntity->language()->getId(),
-                $delta
-            );
-            if ($caption) {
-                $elements[$delta]['#caption'] = [
-                    '#markup' => $caption['caption'],
-                ];
-            }
+      $field = $image->getFieldDefinition();
+      $parentEntity = $image->getEntity();
 
-        }
-        
+      if ($field && $parentEntity) {
+
+        // Get the caption out of DB.
+        $caption = $imageCaption->getCaption(
+              $parentEntity->getEntityTypeId(),
+              $parentEntity->bundle(),
+              $field->getName(),
+              $parentEntity->id(),
+              empty($parentEntity->getRevisionId()) ? $parentEntity->id() : $parentEntity->getRevisionId(),
+              $parentEntity->language()->getId(),
+              $delta
+          );
+
+        $elements[$delta]['#caption'] = [
+          '#markup' => $caption ? $caption['caption'] : '',
+        ];
+      }
+
       // Set a new theme callback function for the image caption formatter.
       $elements[$delta]['#theme'] = 'image_caption_formatter';
     }
-    
+
     return $elements;
   }
+
 }
