@@ -176,18 +176,20 @@ function image_field_caption_entity_storage_load(array $entities, $entity_type_i
                           $entity->language()->getId(),
                           $delta
                         );
+                        
                         // Set the caption value.
                         if (!empty($caption)) {
                           $values[$delta] = $values[$delta] + $caption;
                             $needToSave = true;
                         }
                     }
+    
+                    if ($needToSave) {
+                        // Save all values.
+                        $entity->get($fieldName)->setValue($values);
+                    }
                 }
-                
-                if ($needToSave) {
-                  // Save all values.
-                  $entity->get($fieldName)->setValue($values);
-                }
+
             }
         }
     }
